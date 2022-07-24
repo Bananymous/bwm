@@ -1,2 +1,2 @@
 #/bin/bash
-g++ -Wall bwm.cpp backends/imgui_impl_glfw.cpp backends/imgui_impl_opengl3.cpp -o bwm -lglfw -limgui -lGL
+g++ -Wall src/bwm.cpp src/backends/*.cpp -o bwm -lglfw -limgui -lGL
