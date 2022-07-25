@@ -80,8 +80,8 @@ bool hexstr_to_color(const std::string& str, ImVec4& out)
 		return false;
 
 	for (size_t i = 1; i < str.size(); i++)
-		if (!('0' <= str[i] && str[i] <= '9') ||
-			!('a' <= str[i] && str[i] <= 'f') ||
+		if (!('0' <= str[i] && str[i] <= '9') &&
+			!('a' <= str[i] && str[i] <= 'f') &&
 			!('A' <= str[i] && str[i] <= 'F')
 		)
 			return false;
@@ -152,9 +152,9 @@ void load_config()
 	color_words["wifi_background"]		= ImGuiCol_ChildBg;
 	color_words["dropdown"]				= ImGuiCol_FrameBg;
 	color_words["dropdown_hover"]		= ImGuiCol_FrameBgHovered;
-    color_words["selectable"]			= ImGuiCol_Header;
-    color_words["selectable_active"]	= ImGuiCol_HeaderActive;
-    color_words["selectable_hover"]		= ImGuiCol_HeaderHovered;
+	color_words["selectable"]			= ImGuiCol_Header;
+	color_words["selectable_active"]	= ImGuiCol_HeaderActive;
+	color_words["selectable_hover"]		= ImGuiCol_HeaderHovered;
 	color_words["popup_background"]		= ImGuiCol_PopupBg;
 	color_words["popup_shadow"]			= ImGuiCol_ModalWindowDimBg;
 
@@ -391,8 +391,8 @@ int main(int argc, char** argv)
 	GLFWwindow* window = glfwCreateWindow(width, height, "bwm", NULL, NULL);
 	if (window == NULL)
 		return EXIT_FAILURE;
-    glfwSetCursorPosCallback(window, windowOnCursorPosition);
-    glfwSetMouseButtonCallback(window, windowOnMouseButton);
+	glfwSetCursorPosCallback(window, windowOnCursorPosition);
+	glfwSetMouseButtonCallback(window, windowOnMouseButton);
 
 	glfwMakeContextCurrent(window);
 	glfwSwapInterval(1);
@@ -434,7 +434,7 @@ int main(int argc, char** argv)
 			win[0] += (int)s_cursor_off[0];
 			win[1] += (int)s_cursor_off[1];
 
-            glfwSetWindowPos(window, win[0], win[1]);
+			glfwSetWindowPos(window, win[0], win[1]);
 			s_cursor_off[0] = 0.0;
 			s_cursor_off[1] = 0.0;
 		}
@@ -551,7 +551,7 @@ int main(int argc, char** argv)
 
 			bool connect = false;
 
-			if (ImGui::InputText("password", s_password_prompt.password, sizeof(s_password_prompt.password), flags))
+			if (ImGui::InputText("##", s_password_prompt.password, sizeof(s_password_prompt.password), flags))
 				connect = true;
 
 			ImGui::SameLine();
