@@ -1,2 +1,5 @@
 .vscode/
-bwm
+bin/
+obj/
+**.make
+Makefile

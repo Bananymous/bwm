@@ -1,9 +1,8 @@
 #include "iwd_wrapper.h"
 
 #include <imgui.h>
-
-#include "backends/imgui_impl_glfw.h"
-#include "backends/imgui_impl_opengl3.h"
+#include <backends/imgui_impl_glfw.h>
+#include <backends/imgui_impl_opengl3.h>
 
 #include <GLFW/glfw3.h>
 
@@ -255,6 +254,9 @@ int main(int argc, char** argv)
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
 	
+	ImGuiConfigFlags_DockingEnable;
+	ImGuiConfigFlags_ViewportsEnable;
+
 	glfwWindowHint(GLFW_TRANSPARENT_FRAMEBUFFER, GLFW_TRUE);
 	glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
 
