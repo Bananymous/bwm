@@ -1,3 +1,5 @@
+#include "iwd_wrapper.h"
+
 #include <imgui.h>
 
 #include "backends/imgui_impl_glfw.h"
@@ -8,6 +10,7 @@
 #include <string>
 #include <vector>
 #include <chrono>
+#include <algorithm>
 #include <unordered_map>
 
 #include <math.h>
@@ -15,28 +18,47 @@
 #include <unistd.h>
 #include <pwd.h>
 
+static bool		s_dragging		= false;
+static double	s_cursor[2]		= {};
+static double	s_cursor_off[2]	= {};
+
 static void glfw_error_callback(int error, const char* description)
 {
 	fprintf(stderr, "Glfw Error %d: %s\n", error, description);
 }
 
-static void windowOnCursorPosition(GLFWwindow* window, double x, double y);
-static void windowOnMouseButton(GLFWwindow* window, int button, int action, int mods);
-
-
-struct Network
+static void windowOnCursorPosition(GLFWwindow* window, double x, double y)
 {
-	std::string		ssid;
-	int				strength;
-	bool			connected;
-};
+	if (s_dragging)
+	{
+		s_cursor_off[0] = x - s_cursor[0];
+		s_cursor_off[1] = y - s_cursor[1];
+	}
+}
 
-struct PasswordPrompt
+static void windowOnMouseButton(GLFWwindow* window, int button, int action, int mods)
 {
-	char password[128];
-	std::string ssid;
-};
-static PasswordPrompt s_password_prompt;
+	if (button != GLFW_MOUSE_BUTTON_LEFT)
+		return;
+
+	if (action == GLFW_PRESS)
+	{
+		s_dragging = true;
+
+		double x, y;
+		glfwGetCursorPos(window, &x, &y);
+		s_cursor[0] = x;
+		s_cursor[1] = y;
+	}
+	else if (action == GLFW_RELEASE)
+	{
+		s_dragging = false;
+
+		s_cursor[0] = 0.0;
+		s_cursor[1] = 0.0;
+	}
+}
+
 
 template<typename... Args>
 void config_error(FILE* fp, int line, const char* fmt, Args&&... args)
@@ -48,24 +70,21 @@ void config_error(FILE* fp, int line, const char* fmt, Args&&... args)
 	exit(1);
 }
 
-std::vector<std::string> split_whitespace(const char* data)
+std::vector<std::string> split_whitespace(const std::string& data)
 {
 	std::vector<std::string> result;
-	
-	bool had_whitespace = true;
-	for (int i = 0; data[i] != '\0'; i++)
+
+	std::string::const_iterator begin	= data.begin();
+	std::string::const_iterator end		= data.begin();
+
+	while (end != data.end())
 	{
-		if (isspace(data[i]))
-		{
-			had_whitespace = true;
-		}
-		else
-		{
-			if (had_whitespace)
-				result.push_back("");
-			result.back().push_back(data[i]);
-			had_whitespace = false;
-		}
+		begin = std::find_if_not(end, data.end(), isspace);
+		if (begin == data.end())
+			break;
+		end = std::find_if(begin, data.end(), isspace);
+
+		result.emplace_back(begin, end);
 	}
 
 	return result;
@@ -221,163 +240,13 @@ void load_config()
 	fclose(fp);
 }
 
-std::vector<std::string> get_iwd_devices()
-{
-	char buffer[1024];
-
-	FILE* fp = popen("iwctl device list", "r");
-	if (fp == NULL)
-		return { "NULL" };
-
-	std::vector<std::string> devices;
-
-	// Skip first 4 lines since they are headers
-	for (int i = 0; i < 4; i++)
-		if (fgets(buffer, sizeof(buffer), fp) == NULL)
-			return { "NULL" };
-
-	// Parse out device names
-	while (fgets(buffer, sizeof(buffer), fp) != NULL)
-	{
-		if (buffer[0] == '\n')
-			continue;
-
-		int start	= 2;
-		int end		= 22;
-
-		while (buffer[end - 1] == ' ' && end > start)
-			end--;
-
-		if (end != start)
-			devices.push_back(std::string(buffer + start, end - start));
-	}
-
-	if (pclose(fp) != 0)
-		return { "NULL" };
-
-	return devices;
-}
-
-void scan_iwd_networks(const std::string& device)
-{
-	if (device == "NULL")
-		return;
-
-	char command[1024];
-	snprintf(command, sizeof(command), "iwctl station %s scan > /dev/null 2>&1", device.c_str());
-	system(command);
-}
-
-std::vector<Network> get_iwd_networks(const std::string& device)
-{
-	if (device == "NULL")
-		return {};
-
-	char buffer[1024];
-
-	std::string command = "iwctl station " + device + " get-networks";
-	FILE* fp = popen(command.c_str(), "r");
-	if (fp == NULL)
-		return {};
-	
-	std::vector<Network> networks;
-
-	// Skip first 4 lines since they are headers
-	for (int i = 0; i < 4; i++)
-		if (fgets(buffer, sizeof(buffer), fp) == NULL)
-			return {};
-
-	while (fgets(buffer, sizeof(buffer), fp) != NULL)
-	{
-		if (buffer[0] == '\n')
-			break;
-
-		std::string stripped;
-		for (uint32_t i = 0; i < sizeof(buffer) && buffer[i] != '\n'; i++)
-		{
-			if (buffer[i] == '\033')
-			{
-				while (buffer[i] != 'm')
-					i++;
-				continue;
-			}
-			stripped.push_back(buffer[i]);
-		}
-
-		Network network;
-
-		network.ssid = stripped.substr(4, 32);
-		while (network.ssid.back() == ' ')
-			network.ssid.pop_back();
-		
-		network.strength = 0;
-
-		network.connected = (stripped[2] == '>');
-
-		networks.push_back(network);
-	}
-
-	if (pclose(fp) != 0)
-		return {};
-
-	return networks;
-}
-
-void iwd_disconnect(const std::string& device)
-{
-	if (device == "NULL")
-		return;
-
-	char command[1024];
-	snprintf(command, sizeof(command), "iwctl station %s disconnect", device.c_str());
-	system(command);
-}
-
-bool iwd_connect(const std::string& device, const std::string& ssid)
-{
-	if (device == "NULL")
-		return false;
-	
-	char buffer[1024];
-
-	snprintf(buffer, sizeof(buffer), "iwctl --dont-ask station %s connect \"%s\"", device.c_str(), ssid.c_str());
-
-	FILE* fp = popen(buffer, "r");
-	if (fp == NULL)
-		return false;
-
-	return pclose(fp) == 0;
-}
-
-bool iwd_connect_password(const std::string& device, const std::string& ssid, const std::string& password)
-{
-	if (device == "NULL")
-		return false;
-
-	if (password[0] == '\0')
-		return iwd_connect(device, ssid);
-
-	char buffer[1024];
-
-	snprintf(buffer, sizeof(buffer), "iwctl --passphrase %s station %s connect \"%s\"", password.c_str(), device.c_str(), ssid.c_str());
-
-	FILE* fp = popen(buffer, "r");
-	if (fp == NULL)
-		return false;
-
-	return pclose(fp) == 0;
-}
-
-
-
-static bool		s_dragging		= false;
-static double	s_cursor[2]		= {};
-static double	s_cursor_off[2]	= {};
-
-constexpr int width = 400, height = 400;
 
 int main(int argc, char** argv)
 {
+	using namespace std::chrono_literals;
+
+	constexpr int c_width = 400, c_height = 400;
+
 	glfwSetErrorCallback(glfw_error_callback);
 	if (!glfwInit())
 		return EXIT_FAILURE;
@@ -387,8 +256,9 @@ int main(int argc, char** argv)
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
 	
 	glfwWindowHint(GLFW_TRANSPARENT_FRAMEBUFFER, GLFW_TRUE);
+	glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
 
-	GLFWwindow* window = glfwCreateWindow(width, height, "bwm", NULL, NULL);
+	GLFWwindow* window = glfwCreateWindow(c_width, c_height, "bwm", NULL, NULL);
 	if (window == NULL)
 		return EXIT_FAILURE;
 	glfwSetCursorPosCallback(window, windowOnCursorPosition);
@@ -411,16 +281,36 @@ int main(int argc, char** argv)
 	// Load config file
 	load_config();
 
-	auto iwd_devices		= get_iwd_devices();
-	auto iwd_device_current	= iwd_devices.front();
+	std::vector<std::string> devices;
+	if (!iwd_get_devices(devices))
+	{
+		fprintf(stderr, "Could not get wireless devices\n");
+		return 1;
+	}
+	if (devices.empty())
+	{
+		fprintf(stderr, "No internet devices available\n");
+		return 1;
+	}
+	
+	std::string current_device = devices.front();
 
-	scan_iwd_networks(iwd_device_current);
-	auto iwd_networks = get_iwd_networks(iwd_device_current);
+	iwd_scan(current_device);
+	auto last_scan = std::chrono::steady_clock::now();
 
-	auto last_scan 	= std::chrono::system_clock::now();
-	auto last_get	= std::chrono::system_clock::now();
+	std::vector<std::string> networks;
+	size_t connected = iwd_get_networks(current_device, networks);
+	auto last_get = std::chrono::steady_clock::now();
 
-	std::unordered_map<std::string, bool> header_open;
+	std::vector<std::string> known_networks;
+
+	struct PasswordPrompt
+	{
+		std::string ssid;
+		char password[128];
+		bool show;
+	};
+	PasswordPrompt password_prompt;
 
 	while (!glfwWindowShouldClose(window))
 	{
@@ -445,9 +335,7 @@ int main(int argc, char** argv)
 		ImGui::NewFrame();
 
 		// Set ImGui window to fill whole application window
-		int width, height;
-		glfwGetWindowSize(window, &width, &height);
-		ImGui::SetNextWindowSize(ImVec2(width, height));
+		ImGui::SetNextWindowSize(ImVec2(c_width, c_height));
 		ImGui::SetNextWindowPos(ImVec2(0, 0));
 
 		ImGui::Begin("Window", NULL,
@@ -455,83 +343,141 @@ int main(int argc, char** argv)
 			ImGuiWindowFlags_NoResize
 		);
 
-		if (std::chrono::system_clock::now() >= last_scan + std::chrono::seconds(10))
+		// Scan and update networks on specified intervals
+		if (std::chrono::steady_clock::now() >= last_scan + 10s)
 		{
-			scan_iwd_networks(iwd_device_current);
-			last_scan = std::chrono::system_clock::now();
+			iwd_scan(current_device);
+			last_scan += 10s;
+		}
+		if (std::chrono::steady_clock::now() >= last_get + 2s)
+		{
+			connected = iwd_get_networks(current_device, networks);
+			last_get += 2s;;
 		}
 
-		if (std::chrono::system_clock::now() >= last_get + std::chrono::seconds(2))
+		// Create dropdown for devices
+		if (ImGui::BeginCombo("Device", current_device.c_str()))
 		{
-			iwd_networks = get_iwd_networks(iwd_device_current);
-			last_get = std::chrono::system_clock::now();
-		}
-
-		if (ImGui::BeginCombo("Device", iwd_device_current.c_str()))
-		{
-			for (const std::string& device : iwd_devices)
+			for (const std::string& device : devices)
 			{
-				bool selected = (iwd_device_current == device);
+				bool selected = (current_device == device);
 				if (ImGui::Selectable(device.c_str(), selected))
-					iwd_device_current = device;
+					current_device = device;
 				if (selected)
 					ImGui::SetItemDefaultFocus();
 			}
 			ImGui::EndCombo();
 		}
 
+		ImGui::SameLine();
+		if (ImGui::Button("Known"))
+		{
+			iwd_get_known_networks(known_networks);
+			ImGui::OpenPopup("known-networks");
+		}
+
+		if (ImGui::BeginPopupModal("known-networks", NULL,
+			ImGuiWindowFlags_AlwaysAutoResize |
+			ImGuiWindowFlags_NoTitleBar |
+			ImGuiWindowFlags_NoResize |
+			ImGuiWindowFlags_NoMove
+		))
+		{
+			for (size_t i = 0; i < known_networks.size(); i++)
+			{
+				const std::string& known = known_networks[i];
+				const size_t id_offset = networks.size();
+
+				const float child_padding	= 10.0f;
+				const float text_padding	= 10.0f;
+				const float button_padding	= 5.0f;
+
+				const float font_size 		= ImGui::GetFontSize();
+
+				const ImVec2 child_size		= ImVec2(c_width - 2.0f * child_padding, font_size + 2.0f * text_padding);
+				const ImVec2 button_size	= ImVec2(ImGui::CalcTextSize("Forget").x + 10.0f, child_size.y - 2.0f * button_padding);
+
+				ImGui::BeginChild(id_offset + i + 1, child_size);
+				
+				ImGui::SetCursorPosX(text_padding);
+				ImGui::SetCursorPosY(text_padding);
+
+				ImGui::Text("%s", known.c_str());
+
+				ImGui::SetCursorPosX(child_size.x - button_size.x - button_padding);
+				ImGui::SetCursorPosY(button_padding);
+
+				if (ImGui::Button("Forget", button_size))
+				{
+					if (iwd_forget_known_network(known))
+					{
+						known_networks.erase(known_networks.begin() + i);
+						i--;
+					}
+				}
+
+				ImGui::EndChild();
+			}
+
+			//ImGui::SetCursorPosX(c_width - ImGui::CalcTextSize("Close").x - 25.0f);
+
+			if (ImGui::Button("Close"))
+				ImGui::CloseCurrentPopup();
+			ImGui::EndPopup();
+		}
+
 		ImGui::Spacing();
 		ImGui::Spacing();
-
-		const float		font_h		= ImGui::GetFontSize();
-		const float		child_h		= font_h + 20.0f;
-		const ImVec2	button_size = ImVec2(ImGui::CalcTextSize("Disconnect").x + 20.0f, child_h - 10.0f);
-
-		const float button_offset	= (child_h - button_size.y) / 2.0f;
-		const float text_offset		= (child_h - font_h) / 2.0f;
 
 		bool open_popup = false;
-
-		int index = 1;
-		for (Network& network : iwd_networks)
+		for (size_t i = 0; i < networks.size(); i++)
 		{
-			ImGui::BeginChild(index, ImVec2(0, child_h));
-			ImGui::SetCursorPosX(ImGui::GetCursorPosX() + 5.0f);
-			ImGui::SetCursorPosY(ImGui::GetCursorPosY() + text_offset);
+			const std::string& ssid = networks[i];
 
-			ImGui::Text("%s", network.ssid.c_str());
+			const float child_padding	= 10.0f;
+			const float text_padding	= 10.0f;
+			const float button_padding	= 5.0f;
 
-			ImGui::SameLine();
-			ImGui::SetCursorPosY(ImGui::GetCursorPosY() - text_offset + button_offset);
+			const float font_size 		= ImGui::GetFontSize();
 
-			ImGui::SetCursorPosX(380 - button_size.x);
+			const ImVec2 child_size		= ImVec2(c_width - 2.0f * child_padding, font_size + 2.0f * text_padding);
+			const ImVec2 button_size	= ImVec2(ImGui::CalcTextSize("Disconnect").x + 10.0f, child_size.y - 2.0f * button_padding);
 
-			if (network.connected)
+			ImGui::BeginChild(i + 1, child_size);
+
+			ImGui::SetCursorPosX(text_padding);
+			ImGui::SetCursorPosY(text_padding);
+
+			ImGui::Text("%s", ssid.c_str());
+
+			ImGui::SetCursorPosX(child_size.x - button_size.x - button_padding);
+			ImGui::SetCursorPosY(button_padding);
+
+			if (i == connected)
 			{
 				if (ImGui::Button("Disconnect", button_size))
-				{
-					iwd_disconnect(iwd_device_current);
-					iwd_networks = get_iwd_networks(iwd_device_current);
-				}
+					if (iwd_disconnect(current_device))
+						connected = -1;
 			}
 			else
 			{
 				if (ImGui::Button("Connect", button_size))
 				{
-					if (iwd_connect(iwd_device_current, network.ssid))
-						iwd_networks = get_iwd_networks(iwd_device_current);
+					if (iwd_connect(current_device, ssid))
+					{
+						connected = i;
+					}
 					else
 					{
-						s_password_prompt.password[0] = '\0';
-						s_password_prompt.ssid = network.ssid;
+						password_prompt.ssid = ssid;
+						password_prompt.password[0] = '\0';
+						password_prompt.show = false;
 						open_popup = true;
 					}
 				}
 			}
 
 			ImGui::EndChild();
-
-			index++;
 		}
 
 		if (open_popup)
@@ -539,39 +485,38 @@ int main(int argc, char** argv)
 
 		if (ImGui::BeginPopupModal("password", NULL,
 			ImGuiWindowFlags_AlwaysAutoResize |
+			ImGuiWindowFlags_NoTitleBar |
 			ImGuiWindowFlags_NoResize |
-			ImGuiWindowFlags_NoTitleBar
+			ImGuiWindowFlags_NoMove
 		))
 		{
-			static bool show_password = false;
 			ImGuiInputTextFlags flags = 0;
 			flags |= ImGuiInputTextFlags_EnterReturnsTrue;
-			if (!show_password)
+			if (!password_prompt.show)
 				flags |= ImGuiInputTextFlags_Password;
 
 			bool connect = false;
 
-			if (ImGui::InputText("##", s_password_prompt.password, sizeof(s_password_prompt.password), flags))
+			if (ImGui::InputText("##", password_prompt.password, sizeof(password_prompt.password), flags))
 				connect = true;
 
 			ImGui::SameLine();
 			if (ImGui::Button("Show"))
-				show_password = !show_password;
+				password_prompt.show = !password_prompt.show;
 
 			if (ImGui::Button("Connect"))
 				connect = true;
 
-			if (connect)
+			if (connect && password_prompt.password[0] != '\0')
 			{
-				if (iwd_connect_password(iwd_device_current, s_password_prompt.ssid, s_password_prompt.password))
+				if (iwd_connect(current_device, password_prompt.ssid, password_prompt.password))
 				{
-					iwd_networks = get_iwd_networks(iwd_device_current);
+					for (size_t i = 0; i < networks.size(); i++)
+						if (networks[i] == password_prompt.ssid)
+							connected = i;
 					ImGui::CloseCurrentPopup();
 				}
-				else
-				{
-					s_password_prompt.password[0] = '\0';
-				}
+				password_prompt.password[0] = '\0';
 			}
 
 			ImGui::SameLine();
@@ -603,36 +548,4 @@ int main(int argc, char** argv)
 	glfwTerminate();
 
 	return EXIT_SUCCESS;
-}
-
-static void windowOnCursorPosition(GLFWwindow* window, double x, double y)
-{
-	if (s_dragging)
-	{
-		s_cursor_off[0] = x - s_cursor[0];
-		s_cursor_off[1] = y - s_cursor[1];
-	}
-}
-
-static void windowOnMouseButton(GLFWwindow* window, int button, int action, int mods)
-{
-	if (button != GLFW_MOUSE_BUTTON_LEFT)
-		return;
-
-	if (action == GLFW_PRESS)
-	{
-		s_dragging = true;
-
-		double x, y;
-		glfwGetCursorPos(window, &x, &y);
-		s_cursor[0] = x;
-		s_cursor[1] = y;
-	}
-	else if (action == GLFW_RELEASE)
-	{
-		s_dragging = false;
-
-		s_cursor[0] = 0.0;
-		s_cursor[1] = 0.0;
-	}
 }

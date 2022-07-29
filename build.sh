@@ -1,2 +1,2 @@
 #/bin/bash
-g++ -Wall src/bwm.cpp src/backends/*.cpp -o bwm -lglfw -limgui -lGL
+g++ -Wall -O2 src/*.cpp src/backends/*.cpp -o bwm -lglfw -limgui -lGL
