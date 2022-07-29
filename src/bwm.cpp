@@ -239,7 +239,6 @@ void load_config()
 	fclose(fp);
 }
 
-
 int main(int argc, char** argv)
 {
 	using namespace std::chrono_literals;
@@ -253,9 +252,6 @@ int main(int argc, char** argv)
 	const char* glsl_version = "#version 130";
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
-	
-	ImGuiConfigFlags_DockingEnable;
-	ImGuiConfigFlags_ViewportsEnable;
 
 	glfwWindowHint(GLFW_TRANSPARENT_FRAMEBUFFER, GLFW_TRUE);
 	glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
@@ -265,20 +261,20 @@ int main(int argc, char** argv)
 		return EXIT_FAILURE;
 	glfwSetCursorPosCallback(window, windowOnCursorPosition);
 	glfwSetMouseButtonCallback(window, windowOnMouseButton);
-
 	glfwMakeContextCurrent(window);
 	glfwSwapInterval(1);
+
 
 	// Setup ImGui context
 	IMGUI_CHECKVERSION();
 	ImGui::CreateContext();
 
+	ImGuiIO& io = ImGui::GetIO();
+	io.IniFilename = NULL;
+
 	// Init ImGui backends
 	ImGui_ImplGlfw_InitForOpenGL(window, true);
 	ImGui_ImplOpenGL3_Init(glsl_version);
-
-	// Disable imgui.ini file
-	ImGui::GetIO().IniFilename = NULL;
 
 	// Load config file
 	load_config();
@@ -318,6 +314,7 @@ int main(int argc, char** argv)
 	{
 		glfwPollEvents();
 
+#if 1
 		if (s_dragging && (s_cursor_off[0] != 0 || s_cursor_off[1] != 0))
 		{
 			int win[2];
@@ -330,19 +327,22 @@ int main(int argc, char** argv)
 			s_cursor_off[0] = 0.0;
 			s_cursor_off[1] = 0.0;
 		}
+#endif
 
 		// Create new frame
 		ImGui_ImplOpenGL3_NewFrame();
 		ImGui_ImplGlfw_NewFrame();
 		ImGui::NewFrame();
 
+
 		// Set ImGui window to fill whole application window
 		ImGui::SetNextWindowSize(ImVec2(c_width, c_height));
-		ImGui::SetNextWindowPos(ImVec2(0, 0));
+		ImGui::SetNextWindowPos(ImVec2(0.0f, 0.0f));
 
 		ImGui::Begin("Window", NULL,
 			ImGuiWindowFlags_NoTitleBar |
-			ImGuiWindowFlags_NoResize
+			ImGuiWindowFlags_NoResize |
+			ImGuiWindowFlags_NoMove
 		);
 
 		// Scan and update networks on specified intervals
@@ -420,8 +420,6 @@ int main(int argc, char** argv)
 
 				ImGui::EndChild();
 			}
-
-			//ImGui::SetCursorPosX(c_width - ImGui::CalcTextSize("Close").x - 25.0f);
 
 			if (ImGui::Button("Close"))
 				ImGui::CloseCurrentPopup();
@@ -530,18 +528,14 @@ int main(int argc, char** argv)
 
 		ImGui::End();
 
-		// Render
 		ImGui::Render();
-
 		glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
 		glClear(GL_COLOR_BUFFER_BIT);
-
 		ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 
 		glfwSwapBuffers(window);
 	}
 
-	// Cleanup
 	ImGui_ImplOpenGL3_Shutdown();
 	ImGui_ImplGlfw_Shutdown();
 	ImGui::DestroyContext();
