@@ -1,8 +1,8 @@
 #include "iwd_wrapper.h"
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
 
 bool iwd_get_devices(std::vector<std::string>& out)
 {
@@ -14,7 +14,7 @@ bool iwd_get_devices(std::vector<std::string>& out)
 
 	for (int i = 0; i < 4; i++)
 	{
-		if (fgets(buffer, sizeof(buffer), fp) == NULL)
+		if (std::fgets(buffer, sizeof(buffer), fp) == NULL)
 		{
 			pclose(fp);	
 			return false;
@@ -23,7 +23,7 @@ bool iwd_get_devices(std::vector<std::string>& out)
 
 	std::vector<std::string> devices;
 
-	while (fgets(buffer, sizeof(buffer), fp) != NULL)
+	while (std::fgets(buffer, sizeof(buffer), fp) != NULL)
 	{
 		if (buffer[0] == '\n')
 			continue;
@@ -48,7 +48,7 @@ size_t iwd_get_networks(const std::string& device, std::vector<std::string>& out
 {
 	char buffer[1024];
 
-	snprintf(buffer, sizeof(buffer), "iwctl station %s get-networks", device.c_str());
+	std::snprintf(buffer, sizeof(buffer), "iwctl station %s get-networks", device.c_str());
 
 	FILE* fp = popen(buffer, "r");
 	if (fp == NULL)
@@ -56,7 +56,7 @@ size_t iwd_get_networks(const std::string& device, std::vector<std::string>& out
 	
 	for (int i = 0; i < 4; i++)
 	{
-		if (fgets(buffer, sizeof(buffer), fp) == NULL)
+		if (std::fgets(buffer, sizeof(buffer), fp) == NULL)
 		{
 			pclose(fp);
 			return -2;
@@ -67,7 +67,7 @@ size_t iwd_get_networks(const std::string& device, std::vector<std::string>& out
 	std::vector<std::string> networks;
 
 	size_t index = 0;
-	while (fgets(buffer, sizeof(buffer), fp) != NULL)
+	while (std::fgets(buffer, sizeof(buffer), fp) != NULL)
 	{
 		if (buffer[0] == '\n')
 			continue;
@@ -101,25 +101,25 @@ size_t iwd_get_networks(const std::string& device, std::vector<std::string>& out
 bool iwd_scan(const std::string& device)
 {
 	char command[1024];
-	snprintf(command, sizeof(command), "iwctl station %s scan", device.c_str());
-	return system(command) == 0;
+	std::snprintf(command, sizeof(command), "iwctl station %s scan", device.c_str());
+	return std::system(command) == 0;
 }
 
 bool iwd_connect(const std::string& device, const std::string& ssid, const std::string& password)
 {
 	char command[1024];
 	if (password.empty())
-		snprintf(command, sizeof(command), "iwctl --dont-ask station %s connect \"%s\"", device.c_str(), ssid.c_str());
+		std::snprintf(command, sizeof(command), "iwctl --dont-ask station %s connect \"%s\"", device.c_str(), ssid.c_str());
 	else
-		snprintf(command, sizeof(command), "iwctl --passphrase %s station %s connect \"%s\"", password.c_str(), device.c_str(), ssid.c_str());
-	return system(command) == 0;
+		std::snprintf(command, sizeof(command), "iwctl --passphrase %s station %s connect \"%s\"", password.c_str(), device.c_str(), ssid.c_str());
+	return std::system(command) == 0;
 }
 
 bool iwd_disconnect(const std::string& device)
 {
 	char command[1024];
-	snprintf(command, sizeof(command), "iwctl station %s disconnect", device.c_str());
-	return system(command) == 0;
+	std::snprintf(command, sizeof(command), "iwctl station %s disconnect", device.c_str());
+	return std::system(command) == 0;
 }
 
 bool iwd_get_known_networks(std::vector<std::string>& out)
@@ -132,7 +132,7 @@ bool iwd_get_known_networks(std::vector<std::string>& out)
 
 	for (int i = 0; i < 4; i++)
 	{
-		if (fgets(buffer, sizeof(buffer), fp) == NULL)
+		if (std::fgets(buffer, sizeof(buffer), fp) == NULL)
 		{
 			pclose(fp);
 			return false;
@@ -141,7 +141,7 @@ bool iwd_get_known_networks(std::vector<std::string>& out)
 
 	std::vector<std::string> networks;
 
-	while (fgets(buffer, sizeof(buffer), fp) != NULL)
+	while (std::fgets(buffer, sizeof(buffer), fp) != NULL)
 	{
 		if (buffer[0] == '\n')
 			continue;
@@ -165,6 +165,6 @@ bool iwd_get_known_networks(std::vector<std::string>& out)
 bool iwd_forget_known_network(const std::string& ssid)
 {
 	char command[1024];
-	snprintf(command, sizeof(command), "iwctl known-networks %s forget", ssid.c_str());
-	return system(command) == 0;
+	std::snprintf(command, sizeof(command), "iwctl known-networks %s forget", ssid.c_str());
+	return std::system(command) == 0;
 }
