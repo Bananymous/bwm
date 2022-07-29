@@ -12,8 +12,8 @@
 #include <algorithm>
 #include <unordered_map>
 
-#include <math.h>
-#include <stdio.h>
+#include <cmath>
+#include <cstdio>
 #include <unistd.h>
 #include <pwd.h>
 
@@ -23,7 +23,7 @@ static double	s_cursor_off[2]	= {};
 
 static void glfw_error_callback(int error, const char* description)
 {
-	fprintf(stderr, "Glfw Error %d: %s\n", error, description);
+	std::fprintf(stderr, "Glfw Error %d: %s\n", error, description);
 }
 
 static void windowOnCursorPosition(GLFWwindow* window, double x, double y)
@@ -62,11 +62,11 @@ static void windowOnMouseButton(GLFWwindow* window, int button, int action, int 
 template<typename... Args>
 void config_error(FILE* fp, int line, const char* fmt, Args&&... args)
 {
-	fclose(fp);
-	fprintf(stderr, "Error on config (line %d)\n  ", line);
-	fprintf(stderr, fmt, args...);
-	fprintf(stderr, "\n");
-	exit(1);
+	std::fclose(fp);
+	std::fprintf(stderr, "Error on config (line %d)\n  ", line);
+	std::fprintf(stderr, fmt, args...);
+	std::fprintf(stderr, "\n");
+	std::exit(1);
 }
 
 std::vector<std::string> split_whitespace(const std::string& data)
@@ -104,7 +104,7 @@ bool hexstr_to_color(const std::string& str, ImVec4& out)
 		)
 			return false;
 
-	unsigned long val = strtoul(str.c_str() + 1, NULL, 16);
+	unsigned long val = std::strtoul(str.c_str() + 1, NULL, 16);
 
 	int r, g, b, a;
 
@@ -134,13 +134,13 @@ bool hexstr_to_color(const std::string& str, ImVec4& out)
 std::string get_font_path(const std::string& font_name)
 {
 	char buffer[1024];
-	snprintf(buffer, sizeof(buffer), "fc-match --format=%%{file} '%s'", font_name.c_str());
+	std::snprintf(buffer, sizeof(buffer), "fc-match --format=%%{file} '%s'", font_name.c_str());
 
 	FILE* fp = popen(buffer, "r");
 	if (fp == NULL)
 		return font_name;
 
-	char* ptr = fgets(buffer, sizeof(buffer), fp);
+	char* ptr = std::fgets(buffer, sizeof(buffer), fp);
 
 	if (pclose(fp) != 0 || ptr == NULL)
 		return font_name;
@@ -153,7 +153,7 @@ void load_config()
 	char buffer[1024];
 
 	passwd* pwd = getpwuid(getuid());
-	snprintf(buffer, sizeof(buffer), "%s/.config/bwm/config", pwd->pw_dir);
+	std::snprintf(buffer, sizeof(buffer), "%s/.config/bwm/config", pwd->pw_dir);
 
 	FILE* fp = fopen(buffer, "r");
 	if (fp == NULL)
@@ -177,7 +177,7 @@ void load_config()
 	color_words["popup_shadow"]			= ImGuiCol_ModalWindowDimBg;
 
 	int line = 0;
-	while (fgets(buffer, sizeof(buffer), fp) != NULL)
+	while (std::fgets(buffer, sizeof(buffer), fp) != NULL)
 	{
 		line++;
 
@@ -282,12 +282,12 @@ int main(int argc, char** argv)
 	std::vector<std::string> devices;
 	if (!iwd_get_devices(devices))
 	{
-		fprintf(stderr, "Could not get wireless devices\n");
+		std::fprintf(stderr, "Could not get wireless devices\n");
 		return 1;
 	}
 	if (devices.empty())
 	{
-		fprintf(stderr, "No internet devices available\n");
+		std::fprintf(stderr, "No internet devices available\n");
 		return 1;
 	}
 	
@@ -314,7 +314,6 @@ int main(int argc, char** argv)
 	{
 		glfwPollEvents();
 
-#if 1
 		if (s_dragging && (s_cursor_off[0] != 0 || s_cursor_off[1] != 0))
 		{
 			int win[2];
@@ -327,7 +326,6 @@ int main(int argc, char** argv)
 			s_cursor_off[0] = 0.0;
 			s_cursor_off[1] = 0.0;
 		}
-#endif
 
 		// Create new frame
 		ImGui_ImplOpenGL3_NewFrame();
