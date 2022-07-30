@@ -134,13 +134,13 @@ bool hexstr_to_color(const std::string& str, ImVec4& out)
 std::string get_font_path(const std::string& font_name)
 {
 	char buffer[1024];
-	std::snprintf(buffer, sizeof(buffer), "fc-match --format=%%{file} '%s'", font_name.c_str());
+	snprintf(buffer, sizeof(buffer), "fc-match --format=%%{file} '%s'", font_name.c_str());
 
 	FILE* fp = popen(buffer, "r");
 	if (fp == NULL)
 		return font_name;
 
-	char* ptr = std::fgets(buffer, sizeof(buffer), fp);
+	char* ptr = fgets(buffer, sizeof(buffer), fp);
 
 	if (pclose(fp) != 0 || ptr == NULL)
 		return font_name;
@@ -153,7 +153,7 @@ void load_config()
 	char buffer[1024];
 
 	passwd* pwd = getpwuid(getuid());
-	std::snprintf(buffer, sizeof(buffer), "%s/.config/bwm/config", pwd->pw_dir);
+	snprintf(buffer, sizeof(buffer), "%s/.config/bwm/config", pwd->pw_dir);
 
 	FILE* fp = fopen(buffer, "r");
 	if (fp == NULL)
@@ -177,7 +177,7 @@ void load_config()
 	color_words["popup_shadow"]			= ImGuiCol_ModalWindowDimBg;
 
 	int line = 0;
-	while (std::fgets(buffer, sizeof(buffer), fp) != NULL)
+	while (fgets(buffer, sizeof(buffer), fp) != NULL)
 	{
 		line++;
 
@@ -399,7 +399,7 @@ int main(int argc, char** argv)
 				const float font_size 		= ImGui::GetFontSize();
 
 				const ImVec2 child_size		= ImVec2(c_width - 2.0f * child_padding, font_size + 2.0f * text_padding);
-				const ImVec2 button_size	= ImVec2(ImGui::CalcTextSize("Forget").x + 2h0.0f, child_size.y - 2.0f * button_padding);
+				const ImVec2 button_size	= ImVec2(ImGui::CalcTextSize("Forget").x + 20.0f, child_size.y - 2.0f * button_padding);
 
 				ImGui::BeginChild(id_offset + i + 1, child_size);
 				
