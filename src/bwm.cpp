@@ -23,7 +23,7 @@ static double	s_cursor_off[2]	= {};
 
 static void glfw_error_callback(int error, const char* description)
 {
-	std::fprintf(stderr, "Glfw Error %d: %s\n", error, description);
+	fprintf(stderr, "Glfw Error %d: %s\n", error, description);
 }
 
 static void windowOnCursorPosition(GLFWwindow* window, double x, double y)
@@ -62,11 +62,11 @@ static void windowOnMouseButton(GLFWwindow* window, int button, int action, int 
 template<typename... Args>
 void config_error(FILE* fp, int line, const char* fmt, Args&&... args)
 {
-	std::fclose(fp);
-	std::fprintf(stderr, "Error on config (line %d)\n  ", line);
-	std::fprintf(stderr, fmt, args...);
-	std::fprintf(stderr, "\n");
-	std::exit(1);
+	fclose(fp);
+	fprintf(stderr, "Error on config (line %d)\n  ", line);
+	fprintf(stderr, fmt, args...);
+	fprintf(stderr, "\n");
+	exit(1);
 }
 
 std::vector<std::string> split_whitespace(const std::string& data)
@@ -104,7 +104,7 @@ bool hexstr_to_color(const std::string& str, ImVec4& out)
 		)
 			return false;
 
-	unsigned long val = std::strtoul(str.c_str() + 1, NULL, 16);
+	unsigned long val = strtoul(str.c_str() + 1, NULL, 16);
 
 	int r, g, b, a;
 
@@ -282,12 +282,12 @@ int main(int argc, char** argv)
 	std::vector<std::string> devices;
 	if (!iwd_get_devices(devices))
 	{
-		std::fprintf(stderr, "Could not get wireless devices\n");
+		fprintf(stderr, "Could not get wireless devices\n");
 		return 1;
 	}
 	if (devices.empty())
 	{
-		std::fprintf(stderr, "No internet devices available\n");
+		fprintf(stderr, "No internet devices available\n");
 		return 1;
 	}
 	
@@ -369,8 +369,12 @@ int main(int argc, char** argv)
 			ImGui::EndCombo();
 		}
 
+		ImVec2 known_button_size = ImGui::CalcTextSize("Known");
+		known_button_size.x += 20.0f;
+		known_button_size.y += 10.0f;
+
 		ImGui::SameLine();
-		if (ImGui::Button("Known"))
+		if (ImGui::Button("Known", known_button_size))
 		{
 			iwd_get_known_networks(known_networks);
 			ImGui::OpenPopup("known-networks");
@@ -395,7 +399,7 @@ int main(int argc, char** argv)
 				const float font_size 		= ImGui::GetFontSize();
 
 				const ImVec2 child_size		= ImVec2(c_width - 2.0f * child_padding, font_size + 2.0f * text_padding);
-				const ImVec2 button_size	= ImVec2(ImGui::CalcTextSize("Forget").x + 10.0f, child_size.y - 2.0f * button_padding);
+				const ImVec2 button_size	= ImVec2(ImGui::CalcTextSize("Forget").x + 2h0.0f, child_size.y - 2.0f * button_padding);
 
 				ImGui::BeginChild(id_offset + i + 1, child_size);
 				
