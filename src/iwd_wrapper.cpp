@@ -4,14 +4,18 @@
 #include <cstdlib>
 #include <cstring>
 
+#define PARSE_COLOR " | sed -e 's/\\x1b\\[[0-9;]*m//g'"
+
 bool iwd_get_devices(std::vector<std::string>& out)
 {
 	char buffer[1024];
 
-	FILE* fp = popen("iwctl device list", "r");
+	FILE* fp = popen("iwctl device list" PARSE_COLOR, "r");
 	if (fp == NULL)
 		return false;
 
+
+    size_t offset = 0;
 	for (int i = 0; i < 4; i++)
 	{
 		if (fgets(buffer, sizeof(buffer), fp) == NULL)
@@ -19,6 +23,16 @@ bool iwd_get_devices(std::vector<std::string>& out)
 			pclose(fp);	
 			return false;
 		}
+        if (i == 2)
+        {
+            const char* pos = strstr(buffer, "Name");
+            if (pos == NULL)
+            {
+                pclose(fp);
+                return false;
+            }
+            offset = pos - buffer;
+        }
 	}
 
 	std::vector<std::string> devices;
@@ -28,7 +42,7 @@ bool iwd_get_devices(std::vector<std::string>& out)
 		if (buffer[0] == '\n')
 			continue;
 
-		size_t start	= 2;
+		size_t start	= offset;
 		size_t len		= 20;
 
 		while (buffer[start + len - 1] == ' ')
@@ -48,12 +62,13 @@ size_t iwd_get_networks(const std::string& device, std::vector<std::string>& out
 {
 	char buffer[1024];
 
-	snprintf(buffer, sizeof(buffer), "iwctl station %s get-networks", device.c_str());
+	snprintf(buffer, sizeof(buffer), "iwctl station %s get-networks" PARSE_COLOR, device.c_str());
 
 	FILE* fp = popen(buffer, "r");
 	if (fp == NULL)
 		return -2;
 	
+    size_t offset = 0;
 	for (int i = 0; i < 4; i++)
 	{
 		if (fgets(buffer, sizeof(buffer), fp) == NULL)
@@ -61,6 +76,16 @@ size_t iwd_get_networks(const std::string& device, std::vector<std::string>& out
 			pclose(fp);
 			return -2;
 		}
+        if (i == 2)
+        {
+            const char* pos = strstr(buffer, "Network name");
+            if (pos == NULL)
+            {
+                pclose(fp);
+                return false;
+            }
+            offset = pos - buffer;
+        }
 	}
 
 	size_t connected_index = -1;
@@ -72,16 +97,12 @@ size_t iwd_get_networks(const std::string& device, std::vector<std::string>& out
 		if (buffer[0] == '\n')
 			continue;
 
-		size_t start;
+		size_t start = offset;
 		size_t len = 32;
 
-		if (buffer[2] == ' ')
-			start = 4;
-		else
-		{
-			start = 15;
-			connected_index = index;
-		}
+        for (int i = 0; i < start; i++)
+            if (buffer[i] == '>')
+            connected_index = index;
 
 		while (buffer[start + len - 1] == ' ')
 			len--;
@@ -126,10 +147,11 @@ bool iwd_get_known_networks(std::vector<std::string>& out)
 {
 	char buffer[1024];
 
-	FILE* fp = popen("iwctl known-networks list", "r");
+	FILE* fp = popen("iwctl known-networks list" PARSE_COLOR, "r");
 	if (fp == NULL)
 		return false;
 
+    size_t offset = 0;
 	for (int i = 0; i < 4; i++)
 	{
 		if (fgets(buffer, sizeof(buffer), fp) == NULL)
@@ -137,6 +159,16 @@ bool iwd_get_known_networks(std::vector<std::string>& out)
 			pclose(fp);
 			return false;
 		}
+        if (i == 2)
+        {
+            const char* pos = strstr(buffer, "Name");
+            if (pos == NULL)
+            {
+                pclose(fp);
+                return false;
+            }
+            offset = pos - buffer;
+        }
 	}
 
 	std::vector<std::string> networks;
@@ -146,7 +178,7 @@ bool iwd_get_known_networks(std::vector<std::string>& out)
 		if (buffer[0] == '\n')
 			continue;
 
-		size_t start	= 2;
+		size_t start	= offset;
 		size_t len		= 32;
 
 		while (buffer[start + len - 1] == ' ')
