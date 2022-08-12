@@ -17,47 +17,10 @@
 #include <unistd.h>
 #include <pwd.h>
 
-static bool		s_dragging		= false;
-static double	s_cursor[2]		= {};
-static double	s_cursor_off[2]	= {};
-
 static void glfw_error_callback(int error, const char* description)
 {
 	fprintf(stderr, "Glfw Error %d: %s\n", error, description);
 }
-
-static void windowOnCursorPosition(GLFWwindow* window, double x, double y)
-{
-	if (s_dragging)
-	{
-		s_cursor_off[0] = x - s_cursor[0];
-		s_cursor_off[1] = y - s_cursor[1];
-	}
-}
-
-static void windowOnMouseButton(GLFWwindow* window, int button, int action, int mods)
-{
-	if (button != GLFW_MOUSE_BUTTON_LEFT)
-		return;
-
-	if (action == GLFW_PRESS)
-	{
-		s_dragging = true;
-
-		double x, y;
-		glfwGetCursorPos(window, &x, &y);
-		s_cursor[0] = x;
-		s_cursor[1] = y;
-	}
-	else if (action == GLFW_RELEASE)
-	{
-		s_dragging = false;
-
-		s_cursor[0] = 0.0;
-		s_cursor[1] = 0.0;
-	}
-}
-
 
 template<typename... Args>
 void config_error(FILE* fp, int line, const char* fmt, Args&&... args)
@@ -259,8 +222,6 @@ int main(int argc, char** argv)
 	GLFWwindow* window = glfwCreateWindow(c_width, c_height, "bwm", NULL, NULL);
 	if (window == NULL)
 		return EXIT_FAILURE;
-	glfwSetCursorPosCallback(window, windowOnCursorPosition);
-	glfwSetMouseButtonCallback(window, windowOnMouseButton);
 	glfwMakeContextCurrent(window);
 	glfwSwapInterval(1);
 
@@ -313,19 +274,6 @@ int main(int argc, char** argv)
 	while (!glfwWindowShouldClose(window))
 	{
 		glfwPollEvents();
-
-		if (s_dragging && (s_cursor_off[0] != 0 || s_cursor_off[1] != 0))
-		{
-			int win[2];
-			glfwGetWindowPos(window, &win[0], &win[1]);
-
-			win[0] += (int)s_cursor_off[0];
-			win[1] += (int)s_cursor_off[1];
-
-			glfwSetWindowPos(window, win[0], win[1]);
-			s_cursor_off[0] = 0.0;
-			s_cursor_off[1] = 0.0;
-		}
 
 		// Create new frame
 		ImGui_ImplOpenGL3_NewFrame();
