@@ -67,8 +67,12 @@ project "bwm"
     targetdir "bin/%{cfg.buildcfg}"
 
     files {
-        "src/*.cpp",
-        "src/*.h"
+		"src/bwm.cpp",
+        "src/config.cpp",
+        "src/config.h",
+		"src/imgui_build.cpp",
+        "src/iwd_wrapper.cpp",
+        "src/iwd_wrapper.h"
     }
 
     includedirs {
