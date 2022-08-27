@@ -1,23 +1,9 @@
 #pragma once
 
+#include "structs.h"
+
 #include <vector>
 #include <string>
-
-struct Device
-{
-	std::string	name;
-	std::string address;
-	std::string powered;
-	std::string adapter;
-	std::string mode;
-};
-
-struct Network
-{
-	std::string ssid;
-	std::string security;
-	bool		connected;
-};
 
 bool iwd_get_devices(std::vector<Device>& out);
 

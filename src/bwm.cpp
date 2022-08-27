@@ -1,4 +1,5 @@
-#include "iwd_wrapper.h"
+//#include "iwd_wrapper.h"
+#include "wireless_manager.h"
 #include "config.h"
 
 #include <imgui.h>
@@ -7,16 +8,7 @@
 
 #include <GLFW/glfw3.h>
 
-#include <string>
-#include <vector>
 #include <chrono>
-#include <algorithm>
-#include <unordered_map>
-
-#include <cmath>
-#include <cstdio>
-#include <unistd.h>
-#include <pwd.h>
 
 static void glfw_error_callback(int error, const char* description)
 {
@@ -36,6 +28,13 @@ static void cleanup(GLFWwindow* window)
 int main(int argc, char** argv)
 {
 	using namespace std::chrono_literals;
+
+	(void)argv;
+	if (argc != 1)
+	{
+		fprintf(stderr, "bwm does not support commandline arguments\n");
+		return EXIT_FAILURE;
+	}
 
 	constexpr int c_width = 400, c_height = 400;
 
@@ -80,50 +79,28 @@ int main(int argc, char** argv)
 		return EXIT_FAILURE;
 	}
 	
-	std::vector<Device> devices;
-	if (!iwd_get_devices(devices))
-	{	
-		fprintf(stderr, "Could not get wireless devices\n");
-		return EXIT_FAILURE;
-	}
-	if (devices.empty())
+	WirelessManager wireless_manager(WirelessBackend::iwd);
+
+	if (!wireless_manager.Init())
 	{
-		fprintf(stderr, "No wireless devices available\n");
+		fprintf(stderr, "Could not initialize wireless backend\n");
 		return EXIT_FAILURE;
 	}
 
-	Device& current_device = devices.front();
-	for (Device& device : devices)
-	{
-		if (device.powered == "on")
-		{
-			current_device = device;
-			break;
-		}
-	}
+	wireless_manager.Scan();
+	wireless_manager.UpdateNetworks();
 
-	iwd_scan(current_device);
 	auto next_scan = std::chrono::steady_clock::now() + 10s;
-
-	std::vector<Network> networks;
-	if (!iwd_get_networks(current_device, networks))
-	{
-		// Not fatal
-		fprintf(stderr, "Could not get networks\n");
-	}
-	auto next_get = std::chrono::steady_clock::now() + 2s;
-
-	std::vector<Network> known_networks;
+	auto next_update = std::chrono::steady_clock::now() + 2s;
 
 	struct PasswordPrompt
 	{
-		Network&	network;
+		bool		active			= false;
+		Network		network;
 		char		password[128];
 		bool		show_password;
-		bool		active			= false;
 	};
-	Network dummy_network;
-	PasswordPrompt password_prompt { .network = dummy_network };
+	PasswordPrompt password_prompt;
 
 	while (!glfwWindowShouldClose(window))
 	{
@@ -146,30 +123,33 @@ int main(int argc, char** argv)
 
 		// If password prompt is active we cannot update network list since
 		// password_prompt holds a reference to a network in networks object. 
-		if (password_prompt.active == false && current_device.powered == "on")
+		if (password_prompt.active == false && wireless_manager.GetCurrentDevice().powered == "on")
 		{
 			// Scan and update networks on specified intervals
 			auto current_time = std::chrono::steady_clock::now();
 			if (current_time >= next_scan)
 			{
-				iwd_scan(current_device);
+				wireless_manager.Scan();
 				next_scan = current_time + 10s;
 			}
-			if (current_time >= next_get)
+			if (current_time >= next_update)
 			{
-				iwd_get_networks(current_device, networks);
-				next_get = current_time + 2s;
+				wireless_manager.UpdateNetworks();
+				next_update = current_time + 2s;
 			}
 		}
 
 		// Create dropdown for devices
-		if (ImGui::BeginCombo("Device", current_device.name.c_str()))
+		if (ImGui::BeginCombo("Device", wireless_manager.GetCurrentDevice().name.c_str()))
 		{
+			const auto& devices			= wireless_manager.GetDevices();
+			const auto& current_device	= wireless_manager.GetCurrentDevice();
+
 			for (std::size_t i = 0; i < devices.size(); i++)
 			{
 				bool selected = (&current_device == &devices[i]);
-				if (ImGui::Selectable(devices[i].name.c_str(), selected));
-					current_device = devices[i];
+				if (ImGui::Selectable(devices[i].name.c_str(), selected))
+					wireless_manager.SetCurrentDevice(devices[i]);
 				if (selected)
 					ImGui::SetItemDefaultFocus();
 			}
@@ -183,7 +163,7 @@ int main(int argc, char** argv)
 		ImGui::SameLine();
 		if (ImGui::Button("Known", known_button_size))
 		{
-			iwd_get_known_networks(known_networks);
+			wireless_manager.UpdateKnownNetworks();
 			ImGui::OpenPopup("known-networks");
 		}
 
@@ -194,10 +174,12 @@ int main(int argc, char** argv)
 			ImGuiWindowFlags_NoMove
 		))
 		{
+			const auto& known_networks = wireless_manager.GetKnownNetworks();
+
 			for (size_t i = 0; i < known_networks.size(); i++)
 			{
 				const Network& known = known_networks[i];
-				const size_t id_offset = networks.size();
+				const size_t id_offset = wireless_manager.GetNetworks().size();
 
 				const float child_padding	= 10.0f;
 				const float text_padding	= 10.0f;
@@ -220,11 +202,8 @@ int main(int argc, char** argv)
 
 				if (ImGui::Button("Forget", button_size))
 				{
-					if (iwd_forget_known_network(known))
-					{
-						known_networks.erase(known_networks.begin() + i);
-						i--;
-					}
+					wireless_manager.ForgetKnownNetwork(known);
+					i = 100;
 				}
 
 				ImGui::EndChild();
@@ -241,23 +220,22 @@ int main(int argc, char** argv)
 
 		bool open_password_prompt = false;
 
-		if (current_device.powered != "on")
+		if (wireless_manager.GetCurrentDevice().powered != "on")
 		{
 			if (ImGui::Button("Activate device"))
 			{
-				if (iwd_adapter_power_on(current_device) && iwd_device_power_on(current_device))
+				if (wireless_manager.ActivateDevice())
 				{
-					current_device.powered = "on";
 					next_scan = std::chrono::steady_clock::now();
-					next_get  = std::chrono::steady_clock::now();
+					next_update  = std::chrono::steady_clock::now();
 				}
 			}
 		}
 		else
 		{
-			for (size_t i = 0; i < networks.size(); i++)
+			for (size_t i = 0; i < wireless_manager.GetNetworks().size(); i++)
 			{
-				Network& network = networks[i];
+				const Network& network = wireless_manager.GetNetworks()[i];
 
 				const float child_padding	= 10.0f;
 				const float text_padding	= 10.0f;
@@ -281,18 +259,13 @@ int main(int argc, char** argv)
 				if (network.connected)
 				{
 					if (ImGui::Button("Disconnect", button_size))
-						if (iwd_disconnect(current_device))
-							network.connected = false;
+						wireless_manager.Disconnect();
 				}
 				else
 				{
 					if (ImGui::Button("Connect", button_size))
 					{
-						if (iwd_connect(current_device, network))
-						{
-							network.connected = true;
-						}
-						else
+						if (!wireless_manager.Connect(network))
 						{
 							password_prompt.network = network;
 							password_prompt.password[0] = '\0';
@@ -326,6 +299,8 @@ int main(int argc, char** argv)
 
 			bool close = false;
 
+			ImGui::Text("ssid: %s", password_prompt.network.ssid.c_str());
+
 			if (ImGui::InputText("##", password_prompt.password, sizeof(password_prompt.password), flags))
 				connect = true;
 
@@ -338,11 +313,8 @@ int main(int argc, char** argv)
 
 			if (connect && password_prompt.password[0] != '\0')
 			{
-				if (iwd_connect(current_device, password_prompt.network, password_prompt.password))
-				{
-					password_prompt.network.connected = true;
+				if (wireless_manager.Connect(password_prompt.network, password_prompt.password))
 					close = true;
-				}
 				password_prompt.password[0] = '\0';
 			}
 
@@ -352,7 +324,6 @@ int main(int argc, char** argv)
 
 			if (close)
 			{
-				password_prompt.network = dummy_network;
 				password_prompt.active = false;
 				ImGui::CloseCurrentPopup();
 			}

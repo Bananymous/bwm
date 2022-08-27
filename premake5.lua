@@ -65,6 +65,7 @@ project "bwm"
     kind "ConsoleApp"
     language "C++"
     targetdir "bin/%{cfg.buildcfg}"
+	warnings "Extra"
 
     files {
 		"src/bwm.cpp",
@@ -72,7 +73,10 @@ project "bwm"
         "src/config.h",
 		"src/imgui_build.cpp",
         "src/iwd_wrapper.cpp",
-        "src/iwd_wrapper.h"
+        "src/iwd_wrapper.h",
+		"src/structs.h",
+		"src/wireless_manager.cpp",
+		"src/wireless_manager.h"
     }
 
     includedirs {
