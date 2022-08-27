@@ -79,7 +79,6 @@ int main(int argc, char** argv)
 		cleanup(window);
 		return EXIT_FAILURE;
 	}
-
 	
 	std::vector<Device> devices;
 	if (!iwd_get_devices(devices))
@@ -90,12 +89,21 @@ int main(int argc, char** argv)
 	if (devices.empty())
 	{
 		fprintf(stderr, "No wireless devices available\n");
-		return 1;
+		return EXIT_FAILURE;
 	}
+
 	Device& current_device = devices.front();
+	for (Device& device : devices)
+	{
+		if (device.powered == "on")
+		{
+			current_device = device;
+			break;
+		}
+	}
 
 	iwd_scan(current_device);
-	auto last_scan = std::chrono::steady_clock::now();
+	auto next_scan = std::chrono::steady_clock::now() + 10s;
 
 	std::vector<Network> networks;
 	if (!iwd_get_networks(current_device, networks))
@@ -103,7 +111,7 @@ int main(int argc, char** argv)
 		// Not fatal
 		fprintf(stderr, "Could not get networks\n");
 	}
-	auto last_get = std::chrono::steady_clock::now();
+	auto next_get = std::chrono::steady_clock::now() + 2s;
 
 	std::vector<Network> known_networks;
 
@@ -114,8 +122,8 @@ int main(int argc, char** argv)
 		bool		show_password;
 		bool		active			= false;
 	};
-	Network dummy;
-	PasswordPrompt password_prompt { .network = dummy };
+	Network dummy_network;
+	PasswordPrompt password_prompt { .network = dummy_network };
 
 	while (!glfwWindowShouldClose(window))
 	{
@@ -138,19 +146,19 @@ int main(int argc, char** argv)
 
 		// If password prompt is active we cannot update network list since
 		// password_prompt holds a reference to a network in networks object. 
-		if (password_prompt.active == false)
+		if (password_prompt.active == false && current_device.powered == "on")
 		{
 			// Scan and update networks on specified intervals
 			auto current_time = std::chrono::steady_clock::now();
-			if (current_time >= last_scan + 10s)
+			if (current_time >= next_scan)
 			{
 				iwd_scan(current_device);
-				last_scan = current_time;
+				next_scan = current_time + 10s;
 			}
-			if (current_time >= last_get + 2s)
+			if (current_time >= next_get)
 			{
 				iwd_get_networks(current_device, networks);
-				last_get = current_time;
+				next_get = current_time + 2s;
 			}
 		}
 
@@ -230,62 +238,79 @@ int main(int argc, char** argv)
 		ImGui::Spacing();
 		ImGui::Spacing();
 
-		bool open_popup = false;
-		for (size_t i = 0; i < networks.size(); i++)
+
+		bool open_password_prompt = false;
+
+		if (current_device.powered != "on")
 		{
-			Network& network = networks[i];
-
-			const float child_padding	= 10.0f;
-			const float text_padding	= 10.0f;
-			const float button_padding	= 5.0f;
-
-			const float font_size 		= ImGui::GetFontSize();
-
-			const ImVec2 child_size		= ImVec2(c_width - 2.0f * child_padding, font_size + 2.0f * text_padding);
-			const ImVec2 button_size	= ImVec2(ImGui::CalcTextSize("Disconnect").x + 10.0f, child_size.y - 2.0f * button_padding);
-
-			ImGui::BeginChild(i + 1, child_size);
-
-			ImGui::SetCursorPosX(text_padding);
-			ImGui::SetCursorPosY(text_padding);
-
-			ImGui::Text("%s", network.ssid.c_str());
-
-			ImGui::SetCursorPosX(child_size.x - button_size.x - button_padding);
-			ImGui::SetCursorPosY(button_padding);
-
-			if (network.connected)
+			if (ImGui::Button("Activate device"))
 			{
-				if (ImGui::Button("Disconnect", button_size))
-					if (iwd_disconnect(current_device))
-						network.connected = false;
-			}
-			else
-			{
-				if (ImGui::Button("Connect", button_size))
+				if (iwd_adapter_power_on(current_device) && iwd_device_power_on(current_device))
 				{
-					if (iwd_connect(current_device, network))
-					{
-						network.connected = true;
-					}
-					else
-					{
-						password_prompt.network = network;
-						password_prompt.password[0] = '\0';
-						password_prompt.show_password = false;
-						password_prompt.active = true;
-						open_popup = true;
-					}
+					current_device.powered = "on";
+					next_scan = std::chrono::steady_clock::now();
+					next_get  = std::chrono::steady_clock::now();
 				}
 			}
+		}
+		else
+		{
+			for (size_t i = 0; i < networks.size(); i++)
+			{
+				Network& network = networks[i];
 
-			ImGui::EndChild();
+				const float child_padding	= 10.0f;
+				const float text_padding	= 10.0f;
+				const float button_padding	= 5.0f;
+
+				const float font_size 		= ImGui::GetFontSize();
+
+				const ImVec2 child_size		= ImVec2(c_width - 2.0f * child_padding, font_size + 2.0f * text_padding);
+				const ImVec2 button_size	= ImVec2(ImGui::CalcTextSize("Disconnect").x + 10.0f, child_size.y - 2.0f * button_padding);
+
+				ImGui::BeginChild(i + 1, child_size);
+
+				ImGui::SetCursorPosX(text_padding);
+				ImGui::SetCursorPosY(text_padding);
+
+				ImGui::Text("%s", network.ssid.c_str());
+
+				ImGui::SetCursorPosX(child_size.x - button_size.x - button_padding);
+				ImGui::SetCursorPosY(button_padding);
+
+				if (network.connected)
+				{
+					if (ImGui::Button("Disconnect", button_size))
+						if (iwd_disconnect(current_device))
+							network.connected = false;
+				}
+				else
+				{
+					if (ImGui::Button("Connect", button_size))
+					{
+						if (iwd_connect(current_device, network))
+						{
+							network.connected = true;
+						}
+						else
+						{
+							password_prompt.network = network;
+							password_prompt.password[0] = '\0';
+							password_prompt.show_password = false;
+							password_prompt.active = true;
+							open_password_prompt = true;
+						}
+					}
+				}
+
+				ImGui::EndChild();
+			}
 		}
 
-		if (open_popup)
-			ImGui::OpenPopup("password");
+		if (open_password_prompt)
+			ImGui::OpenPopup("password-prompt");
 
-		if (ImGui::BeginPopupModal("password", NULL,
+		if (ImGui::BeginPopupModal("password-prompt", NULL,
 			ImGuiWindowFlags_AlwaysAutoResize |
 			ImGuiWindowFlags_NoTitleBar |
 			ImGuiWindowFlags_NoResize |
@@ -298,6 +323,8 @@ int main(int argc, char** argv)
 				flags |= ImGuiInputTextFlags_Password;
 
 			bool connect = false;
+
+			bool close = false;
 
 			if (ImGui::InputText("##", password_prompt.password, sizeof(password_prompt.password), flags))
 				connect = true;
@@ -314,15 +341,18 @@ int main(int argc, char** argv)
 				if (iwd_connect(current_device, password_prompt.network, password_prompt.password))
 				{
 					password_prompt.network.connected = true;
-					password_prompt.active = false;
-					ImGui::CloseCurrentPopup();
+					close = true;
 				}
 				password_prompt.password[0] = '\0';
 			}
 
 			ImGui::SameLine();
 			if (ImGui::Button("Cancel"))
+				close = true;
+
+			if (close)
 			{
+				password_prompt.network = dummy_network;
 				password_prompt.active = false;
 				ImGui::CloseCurrentPopup();
 			}
