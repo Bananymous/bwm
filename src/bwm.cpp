@@ -1,4 +1,5 @@
 #include "iwd_wrapper.h"
+#include "config.h"
 
 #include <imgui.h>
 #include <backends/imgui_impl_glfw.h>
@@ -22,184 +23,14 @@ static void glfw_error_callback(int error, const char* description)
 	fprintf(stderr, "Glfw Error %d: %s\n", error, description);
 }
 
-template<typename... Args>
-void config_error(FILE* fp, int line, const char* fmt, Args&&... args)
+static void cleanup(GLFWwindow* window)
 {
-	fclose(fp);
-	fprintf(stderr, "Error on config (line %d)\n  ", line);
-	fprintf(stderr, fmt, args...);
-	fprintf(stderr, "\n");
-	exit(1);
-}
+	ImGui_ImplOpenGL3_Shutdown();
+	ImGui_ImplGlfw_Shutdown();
+	ImGui::DestroyContext();
 
-std::vector<std::string> split_whitespace(const std::string& data)
-{
-	std::vector<std::string> result;
-
-	std::string::const_iterator begin	= data.begin();
-	std::string::const_iterator end		= data.begin();
-
-	while (end != data.end())
-	{
-		begin = std::find_if_not(end, data.end(), isspace);
-		if (begin == data.end())
-			break;
-		end = std::find_if(begin, data.end(), isspace);
-
-		result.emplace_back(begin, end);
-	}
-
-	return result;
-}
-
-bool hexstr_to_color(const std::string& str, ImVec4& out)
-{
-	if (str.empty() || str.front() != '#')
-		return false;
-
-	if (str.size() != 7 && str.size() != 9)
-		return false;
-
-	for (size_t i = 1; i < str.size(); i++)
-		if (!('0' <= str[i] && str[i] <= '9') &&
-			!('a' <= str[i] && str[i] <= 'f') &&
-			!('A' <= str[i] && str[i] <= 'F')
-		)
-			return false;
-
-	unsigned long val = strtoul(str.c_str() + 1, NULL, 16);
-
-	int r, g, b, a;
-
-	if (str.size() == 7)
-	{
-		r = (val >> 16) & 0xFF;
-		g = (val >>  8) & 0xFF;
-		b = (val >>  0) & 0xFF;
-		a = 255;
-	}
-	else
-	{
-		r = (val >> 24) & 0xFF;
-		g = (val >> 16) & 0xFF;
-		b = (val >>  8) & 0xFF;
-		a = (val >>  0) & 0xFF;
-	}
-
-	out.x = (float)r / 255.0f;
-	out.y = (float)g / 255.0f;
-	out.z = (float)b / 255.0f;
-	out.w = (float)a / 255.0f;
-
-	return true;
-}
-
-std::string get_font_path(const std::string& font_name)
-{
-	char buffer[1024];
-	snprintf(buffer, sizeof(buffer), "fc-match --format=%%{file} '%s'", font_name.c_str());
-
-	FILE* fp = popen(buffer, "r");
-	if (fp == NULL)
-		return font_name;
-
-	char* ptr = fgets(buffer, sizeof(buffer), fp);
-
-	if (pclose(fp) != 0 || ptr == NULL)
-		return font_name;
-
-	return buffer;
-}
-
-void load_config()
-{
-	char buffer[1024];
-
-	passwd* pwd = getpwuid(getuid());
-	snprintf(buffer, sizeof(buffer), "%s/.config/bwm/config", pwd->pw_dir);
-
-	FILE* fp = fopen(buffer, "r");
-	if (fp == NULL)
-		return;
-
-	ImGuiIO&	io		= ImGui::GetIO();
-	ImGuiStyle&	style	= ImGui::GetStyle();
-
-	std::unordered_map<std::string, ImGuiCol> color_words;
-	color_words["background"]			= ImGuiCol_WindowBg;
-	color_words["button"]				= ImGuiCol_Button;
-	color_words["button_active"]		= ImGuiCol_ButtonActive;
-	color_words["button_hover"]			= ImGuiCol_ButtonHovered;
-	color_words["wifi_background"]		= ImGuiCol_ChildBg;
-	color_words["dropdown"]				= ImGuiCol_FrameBg;
-	color_words["dropdown_hover"]		= ImGuiCol_FrameBgHovered;
-	color_words["selectable"]			= ImGuiCol_Header;
-	color_words["selectable_active"]	= ImGuiCol_HeaderActive;
-	color_words["selectable_hover"]		= ImGuiCol_HeaderHovered;
-	color_words["popup_background"]		= ImGuiCol_PopupBg;
-	color_words["popup_shadow"]			= ImGuiCol_ModalWindowDimBg;
-
-	int line = 0;
-	while (fgets(buffer, sizeof(buffer), fp) != NULL)
-	{
-		line++;
-
-		std::vector<std::string> splitted = split_whitespace(buffer);
-		
-		if (splitted.empty() || splitted.front().front() == '#')
-			continue;
-
-		if (color_words.find(splitted[0]) != color_words.end())
-		{
-			if (splitted.size() != 2)
-				config_error(fp, line, "usage: %s <color>", splitted[0].c_str());
-			
-			ImVec4 color;
-			if (!hexstr_to_color(splitted[1], color))
-				config_error(fp, line, "specify color as hex string '#xxxxxx' or '#xxxxxxxx'");
-			
-			style.Colors[color_words[splitted[0]]] = color;
-		}
-		else if (splitted.front() == "font")
-		{
-			if (splitted.size() < 3)
-				config_error(fp, line, "usage: font <font name>, <size>");
-
-			if (splitted[splitted.size() - 2].back() != ',')
-				config_error(fp, line, "usage: font <font name>, <size>");
-
-			std::string font = splitted[1];
-			for (size_t i = 2; i < splitted.size() - 1; i++)
-				font += ' ' + splitted[i];
-			font.pop_back();
-
-			std::string file = get_font_path(font);
-			if (file.empty())
-				config_error(fp, line, "could not find font '%s'", font.c_str());
-
-			float size;
-
-			try
-			{
-				size = std::stof(splitted.back());
-			}
-			catch(const std::exception& e)
-			{
-				config_error(fp, line, "font size not a number");
-			}
-			
-
-			io.Fonts->AddFontFromFileTTF(file.c_str(), size);
-		}
-		else
-		{
-			config_error(fp, line, "unknown keyword '%s'", splitted[0].c_str());
-		}
-
-
-	}
-
-	fclose(fp);
+	glfwDestroyWindow(window);
+	glfwTerminate();
 }
 
 int main(int argc, char** argv)
@@ -210,7 +41,10 @@ int main(int argc, char** argv)
 
 	glfwSetErrorCallback(glfw_error_callback);
 	if (!glfwInit())
+	{
+		fprintf(stderr, "Could not initalize glfw\n");
 		return EXIT_FAILURE;
+	}
 
 	const char* glsl_version = "#version 130";
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
@@ -221,10 +55,12 @@ int main(int argc, char** argv)
 
 	GLFWwindow* window = glfwCreateWindow(c_width, c_height, "bwm", NULL, NULL);
 	if (window == NULL)
+	{
+		fprintf(stderr, "Could not create window\n");
 		return EXIT_FAILURE;
+	}
 	glfwMakeContextCurrent(window);
 	glfwSwapInterval(1);
-
 
 	// Setup ImGui context
 	IMGUI_CHECKVERSION();
@@ -238,38 +74,48 @@ int main(int argc, char** argv)
 	ImGui_ImplOpenGL3_Init(glsl_version);
 
 	// Load config file
-	load_config();
-
-	std::vector<std::string> devices;
-	if (!iwd_get_devices(devices))
+	if (!ParseConfig())
 	{
+		cleanup(window);
+		return EXIT_FAILURE;
+	}
+
+	
+	std::vector<Device> devices;
+	if (!iwd_get_devices(devices))
+	{	
 		fprintf(stderr, "Could not get wireless devices\n");
-		return 1;
+		return EXIT_FAILURE;
 	}
 	if (devices.empty())
 	{
-		fprintf(stderr, "No internet devices available\n");
+		fprintf(stderr, "No wireless devices available\n");
 		return 1;
 	}
-	
-	std::string current_device = devices.front();
+	Device& current_device = devices.front();
 
 	iwd_scan(current_device);
 	auto last_scan = std::chrono::steady_clock::now();
 
-	std::vector<std::string> networks;
-	size_t connected = iwd_get_networks(current_device, networks);
+	std::vector<Network> networks;
+	if (!iwd_get_networks(current_device, networks))
+	{
+		// Not fatal
+		fprintf(stderr, "Could not get networks\n");
+	}
 	auto last_get = std::chrono::steady_clock::now();
 
-	std::vector<std::string> known_networks;
+	std::vector<Network> known_networks;
 
 	struct PasswordPrompt
 	{
-		std::string ssid;
-		char password[128];
-		bool show;
+		Network&	network;
+		char		password[128];
+		bool		show_password;
+		bool		active			= false;
 	};
-	PasswordPrompt password_prompt;
+	Network dummy;
+	PasswordPrompt password_prompt { .network = dummy };
 
 	while (!glfwWindowShouldClose(window))
 	{
@@ -279,7 +125,6 @@ int main(int argc, char** argv)
 		ImGui_ImplOpenGL3_NewFrame();
 		ImGui_ImplGlfw_NewFrame();
 		ImGui::NewFrame();
-
 
 		// Set ImGui window to fill whole application window
 		ImGui::SetNextWindowSize(ImVec2(c_width, c_height));
@@ -291,26 +136,32 @@ int main(int argc, char** argv)
 			ImGuiWindowFlags_NoMove
 		);
 
-		// Scan and update networks on specified intervals
-		if (std::chrono::steady_clock::now() >= last_scan + 10s)
+		// If password prompt is active we cannot update network list since
+		// password_prompt holds a reference to a network in networks object. 
+		if (password_prompt.active == false)
 		{
-			iwd_scan(current_device);
-			last_scan += 10s;
-		}
-		if (std::chrono::steady_clock::now() >= last_get + 2s)
-		{
-			connected = iwd_get_networks(current_device, networks);
-			last_get += 2s;;
+			// Scan and update networks on specified intervals
+			auto current_time = std::chrono::steady_clock::now();
+			if (current_time >= last_scan + 10s)
+			{
+				iwd_scan(current_device);
+				last_scan = current_time;
+			}
+			if (current_time >= last_get + 2s)
+			{
+				iwd_get_networks(current_device, networks);
+				last_get = current_time;
+			}
 		}
 
 		// Create dropdown for devices
-		if (ImGui::BeginCombo("Device", current_device.c_str()))
+		if (ImGui::BeginCombo("Device", current_device.name.c_str()))
 		{
-			for (const std::string& device : devices)
+			for (std::size_t i = 0; i < devices.size(); i++)
 			{
-				bool selected = (current_device == device);
-				if (ImGui::Selectable(device.c_str(), selected))
-					current_device = device;
+				bool selected = (&current_device == &devices[i]);
+				if (ImGui::Selectable(devices[i].name.c_str(), selected));
+					current_device = devices[i];
 				if (selected)
 					ImGui::SetItemDefaultFocus();
 			}
@@ -337,7 +188,7 @@ int main(int argc, char** argv)
 		{
 			for (size_t i = 0; i < known_networks.size(); i++)
 			{
-				const std::string& known = known_networks[i];
+				const Network& known = known_networks[i];
 				const size_t id_offset = networks.size();
 
 				const float child_padding	= 10.0f;
@@ -354,7 +205,7 @@ int main(int argc, char** argv)
 				ImGui::SetCursorPosX(text_padding);
 				ImGui::SetCursorPosY(text_padding);
 
-				ImGui::Text("%s", known.c_str());
+				ImGui::Text("%s", known.ssid.c_str());
 
 				ImGui::SetCursorPosX(child_size.x - button_size.x - button_padding);
 				ImGui::SetCursorPosY(button_padding);
@@ -382,7 +233,7 @@ int main(int argc, char** argv)
 		bool open_popup = false;
 		for (size_t i = 0; i < networks.size(); i++)
 		{
-			const std::string& ssid = networks[i];
+			Network& network = networks[i];
 
 			const float child_padding	= 10.0f;
 			const float text_padding	= 10.0f;
@@ -398,30 +249,31 @@ int main(int argc, char** argv)
 			ImGui::SetCursorPosX(text_padding);
 			ImGui::SetCursorPosY(text_padding);
 
-			ImGui::Text("%s", ssid.c_str());
+			ImGui::Text("%s", network.ssid.c_str());
 
 			ImGui::SetCursorPosX(child_size.x - button_size.x - button_padding);
 			ImGui::SetCursorPosY(button_padding);
 
-			if (i == connected)
+			if (network.connected)
 			{
 				if (ImGui::Button("Disconnect", button_size))
 					if (iwd_disconnect(current_device))
-						connected = -1;
+						network.connected = false;
 			}
 			else
 			{
 				if (ImGui::Button("Connect", button_size))
 				{
-					if (iwd_connect(current_device, ssid))
+					if (iwd_connect(current_device, network))
 					{
-						connected = i;
+						network.connected = true;
 					}
 					else
 					{
-						password_prompt.ssid = ssid;
+						password_prompt.network = network;
 						password_prompt.password[0] = '\0';
-						password_prompt.show = false;
+						password_prompt.show_password = false;
+						password_prompt.active = true;
 						open_popup = true;
 					}
 				}
@@ -442,7 +294,7 @@ int main(int argc, char** argv)
 		{
 			ImGuiInputTextFlags flags = 0;
 			flags |= ImGuiInputTextFlags_EnterReturnsTrue;
-			if (!password_prompt.show)
+			if (!password_prompt.show_password)
 				flags |= ImGuiInputTextFlags_Password;
 
 			bool connect = false;
@@ -452,18 +304,17 @@ int main(int argc, char** argv)
 
 			ImGui::SameLine();
 			if (ImGui::Button("Show"))
-				password_prompt.show = !password_prompt.show;
+				password_prompt.show_password = !password_prompt.show_password;
 
 			if (ImGui::Button("Connect"))
 				connect = true;
 
 			if (connect && password_prompt.password[0] != '\0')
 			{
-				if (iwd_connect(current_device, password_prompt.ssid, password_prompt.password))
+				if (iwd_connect(current_device, password_prompt.network, password_prompt.password))
 				{
-					for (size_t i = 0; i < networks.size(); i++)
-						if (networks[i] == password_prompt.ssid)
-							connected = i;
+					password_prompt.network.connected = true;
+					password_prompt.active = false;
 					ImGui::CloseCurrentPopup();
 				}
 				password_prompt.password[0] = '\0';
@@ -471,7 +322,10 @@ int main(int argc, char** argv)
 
 			ImGui::SameLine();
 			if (ImGui::Button("Cancel"))
+			{
+				password_prompt.active = false;
 				ImGui::CloseCurrentPopup();
+			}
 
 			ImGui::EndPopup();
 		}
