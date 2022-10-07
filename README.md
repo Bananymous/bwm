@@ -6,7 +6,7 @@ depends on glfw, imgui, iwd
 # Installation
 
 ```
-$ git clone https://github.com/Bananymous/bwm
+$ git clone --recursive https://github.com/Bananymous/bwm
 
 $ cd bwm
 
