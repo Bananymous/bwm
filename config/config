@@ -1,0 +1,24 @@
+# font
+font mono, 16
+
+# set background color
+background		#404040cc
+
+# set wifi entry background color
+wifi_background		#2a2a2acc
+
+# set button color
+button			#262626cc
+button_active		#1a1a1acc
+button_hover		#1a1a1acc
+
+# set dropdown colors
+dropdown		#262626cc
+dropdown_hover		#1a1a1acc
+selectable		#262626cc
+selectable_hover	#1a1a1acc
+selectable_active	#1a1a1acc
+
+# set popup colors
+popup_background	#303030cc
+popup_shadow		#00000020
