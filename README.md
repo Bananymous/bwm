@@ -1,7 +1,8 @@
 # bwm
 iwctl wrapper for connecting to wireless networks
 
-depends on glfw, imgui, iwd
+# Dependencies
+glfw, imgui (included in this repo, no need to explicitly install)
 
 # Installation
 
