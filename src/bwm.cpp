@@ -10,8 +10,8 @@
 
 #include <chrono>
 
-#define WINDOW_WIDTH 400
-#define WINDOW_HEIGHT 400
+#define WINDOW_WIDTH	400
+#define WINDOW_HEIGHT	400
 
 static void glfw_error_callback(int error, const char* description)
 {
@@ -45,7 +45,6 @@ static void known_networks_popup(WirelessManager* wireless_manager)
 	for (size_t i = 0; i < known_networks.size(); i++)
 	{
 		const Network& known = known_networks[i];
-		const size_t id_offset = wireless_manager->GetNetworks().size();
 
 		const float child_padding	= 10.0f;
 		const float text_padding	= 10.0f;
@@ -56,7 +55,7 @@ static void known_networks_popup(WirelessManager* wireless_manager)
 		const ImVec2 child_size		= ImVec2(WINDOW_WIDTH - 2.0f * child_padding, font_size + 2.0f * text_padding);
 		const ImVec2 button_size	= ImVec2(ImGui::CalcTextSize("Forget").x + 20.0f, child_size.y - 2.0f * button_padding);
 
-		ImGui::BeginChild(id_offset + i + 1, child_size);
+		ImGui::BeginChild(i + 1, child_size);
 		
 		ImGui::SetCursorPosX(text_padding);
 		ImGui::SetCursorPosY(text_padding);
@@ -229,49 +228,46 @@ int main(int argc, char** argv)
 				}
 			}
 		}
-		else
+		else if (ImGui::BeginTable("networks", 3))
 		{
+			const ImVec2 button_size = ImVec2(ImGui::CalcTextSize("Disconnect").x + 10.0f, 0.0f);
+
+			ImGui::TableSetupColumn("ssid");
+			ImGui::TableSetupColumn("security", ImGuiTableColumnFlags_WidthFixed, -1);
+			ImGui::TableSetupColumn("",			ImGuiTableColumnFlags_WidthFixed, -1);
+			ImGui::TableHeadersRow();
+
 			for (size_t i = 0; i < wireless_manager->GetNetworks().size(); i++)
 			{
 				const Network& network = wireless_manager->GetNetworks()[i];
 
-				const float child_padding	= 10.0f;
-				const float text_padding	= 10.0f;
-				const float button_padding	= 5.0f;
-
-				const float font_size 		= ImGui::GetFontSize();
-
-				const ImVec2 child_size		= ImVec2(WINDOW_WIDTH - 2.0f * child_padding, font_size + 2.0f * text_padding);
-				const ImVec2 button_size	= ImVec2(ImGui::CalcTextSize("Disconnect").x + 10.0f, child_size.y - 2.0f * button_padding);
-
-				ImGui::BeginChild(i + 1, child_size);
-
-				ImGui::SetCursorPosX(text_padding);
-				ImGui::SetCursorPosY(text_padding);
-
+				ImGui::TableNextColumn();
 				ImGui::Text("%s", network.ssid.c_str());
 
-				ImGui::SetCursorPosX(child_size.x - button_size.x - button_padding);
-				ImGui::SetCursorPosY(button_padding);
+				ImGui::TableNextColumn();
+				ImGui::Text("%s", network.security.c_str());
 
+				ImGui::TableNextColumn();
 				if (network.connected)
 				{
+					ImGui::PushID(i + 1);
 					if (ImGui::Button("Disconnect", button_size))
 						wireless_manager->Disconnect();
+					ImGui::PopID();
 				}
 				else
 				{
+					ImGui::PushID(i + 1);
 					if (ImGui::Button("Connect", button_size))
 					{
-						// Try to connect without credentials (open network or known network)
-						// If it is unsuccessfull, open a login screen
 						if (!wireless_manager->Connect(network))
 							login_screen = LoginScreen::Create(wireless_manager, network);
 					}
+					ImGui::PopID();
 				}
-
-				ImGui::EndChild();
 			}
+
+			ImGui::EndTable();
 		}
 
 		if (login_screen)
