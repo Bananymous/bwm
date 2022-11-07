@@ -12,35 +12,30 @@ enum class WirelessBackend
 
 class WirelessManager
 {
+protected:
+	WirelessManager() {}
+
 public:
-	WirelessManager(WirelessBackend backend)
-		: m_backend(backend)
-	{ }
+	static WirelessManager* Create(WirelessBackend backend);
 
-	bool Init();
+	virtual ~WirelessManager() {};
 
-	const Device& GetCurrentDevice() const { return m_devices[m_current_index]; }
-	bool SetCurrentDevice(const Device& device);
-	bool ActivateDevice();
+	virtual bool Init() = 0;
 
-	const std::vector<Device>&  GetDevices() const			{ return m_devices; }
-	const std::vector<Network>& GetNetworks() const			{ return m_networks; }
-	const std::vector<Network>& GetKnownNetworks() const	{ return m_known_networks; }
+	virtual const Device& GetCurrentDevice() const = 0;
+	virtual bool SetCurrentDevice(const Device& device) = 0;
+	virtual bool ActivateDevice() = 0;
 
-	bool Scan();
-	bool UpdateNetworks();
+	virtual const std::vector<Device>&  GetDevices() const = 0;
+	virtual const std::vector<Network>& GetNetworks() const = 0;
+	virtual const std::vector<Network>& GetKnownNetworks() const = 0;
 
-	bool Connect(const Network& network, const std::string& password = "");
-	bool Disconnect();
+	virtual bool Scan() = 0;
+	virtual bool UpdateNetworks() = 0;
 
-	bool UpdateKnownNetworks();
-	bool ForgetKnownNetwork(const Network& network);
+	virtual bool Connect(const Network& network, const std::string& password = "") = 0;
+	virtual bool Disconnect() = 0;
 
-private:
-	WirelessBackend			m_backend;
-
-	std::size_t				m_current_index;
-	std::vector<Device>		m_devices;
-	std::vector<Network>	m_networks;
-	std::vector<Network>	m_known_networks;
+	virtual bool UpdateKnownNetworks() = 0;
+	virtual bool ForgetKnownNetwork(const Network& network) = 0;
 };
