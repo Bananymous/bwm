@@ -9,6 +9,9 @@
 
 #include <chrono>
 
+#define WINDOW_WIDTH 400
+#define WINDOW_HEIGHT 400
+
 static void glfw_error_callback(int error, const char* description)
 {
 	fprintf(stderr, "Glfw Error %d: %s\n", error, description);
@@ -24,6 +27,59 @@ static void cleanup(GLFWwindow* window)
 	glfwTerminate();
 }
 
+static void known_networks_popup(WirelessManager* wireless_manager)
+{
+	if (!ImGui::BeginPopupModal("known-networks", NULL,
+		ImGuiWindowFlags_AlwaysAutoResize |
+		ImGuiWindowFlags_NoTitleBar |
+		ImGuiWindowFlags_NoResize |
+		ImGuiWindowFlags_NoMove
+	))
+	{
+		return;
+	}
+
+	const auto& known_networks = wireless_manager->GetKnownNetworks();
+
+	for (size_t i = 0; i < known_networks.size(); i++)
+	{
+		const Network& known = known_networks[i];
+		const size_t id_offset = wireless_manager->GetNetworks().size();
+
+		const float child_padding	= 10.0f;
+		const float text_padding	= 10.0f;
+		const float button_padding	= 5.0f;
+
+		const float font_size 		= ImGui::GetFontSize();
+
+		const ImVec2 child_size		= ImVec2(WINDOW_WIDTH - 2.0f * child_padding, font_size + 2.0f * text_padding);
+		const ImVec2 button_size	= ImVec2(ImGui::CalcTextSize("Forget").x + 20.0f, child_size.y - 2.0f * button_padding);
+
+		ImGui::BeginChild(id_offset + i + 1, child_size);
+		
+		ImGui::SetCursorPosX(text_padding);
+		ImGui::SetCursorPosY(text_padding);
+
+		ImGui::Text("%s", known.ssid.c_str());
+
+		ImGui::SetCursorPosX(child_size.x - button_size.x - button_padding);
+		ImGui::SetCursorPosY(button_padding);
+
+		if (ImGui::Button("Forget", button_size))
+		{
+			wireless_manager->ForgetKnownNetwork(known);
+			i = 100;
+		}
+
+		ImGui::EndChild();
+	}
+
+	if (ImGui::Button("Close"))
+		ImGui::CloseCurrentPopup();
+	ImGui::EndPopup();
+
+}
+
 int main(int argc, char** argv)
 {
 	using namespace std::chrono_literals;
@@ -34,8 +90,6 @@ int main(int argc, char** argv)
 		fprintf(stderr, "bwm does not support commandline arguments\n");
 		return EXIT_FAILURE;
 	}
-
-	constexpr int c_width = 400, c_height = 400;
 
 	glfwSetErrorCallback(glfw_error_callback);
 	if (!glfwInit())
@@ -51,7 +105,7 @@ int main(int argc, char** argv)
 	glfwWindowHint(GLFW_TRANSPARENT_FRAMEBUFFER, GLFW_TRUE);
 	glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
 
-	GLFWwindow* window = glfwCreateWindow(c_width, c_height, "bwm", NULL, NULL);
+	GLFWwindow* window = glfwCreateWindow(WINDOW_WIDTH, WINDOW_HEIGHT, "bwm", NULL, NULL);
 	if (window == NULL)
 	{
 		fprintf(stderr, "Could not create window\n");
@@ -110,7 +164,7 @@ int main(int argc, char** argv)
 		ImGui::NewFrame();
 
 		// Set ImGui window to fill whole application window
-		ImGui::SetNextWindowSize(ImVec2(c_width, c_height));
+		ImGui::SetNextWindowSize(ImVec2(WINDOW_WIDTH, WINDOW_HEIGHT));
 		ImGui::SetNextWindowPos(ImVec2(0.0f, 0.0f));
 
 		ImGui::Begin("Window", NULL,
@@ -241,7 +295,7 @@ int main(int argc, char** argv)
 
 				const float font_size 		= ImGui::GetFontSize();
 
-				const ImVec2 child_size		= ImVec2(c_width - 2.0f * child_padding, font_size + 2.0f * text_padding);
+				const ImVec2 child_size		= ImVec2(WINDOW_WIDTH - 2.0f * child_padding, font_size + 2.0f * text_padding);
 				const ImVec2 button_size	= ImVec2(ImGui::CalcTextSize("Disconnect").x + 10.0f, child_size.y - 2.0f * button_padding);
 
 				ImGui::BeginChild(i + 1, child_size);
