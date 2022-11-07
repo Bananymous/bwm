@@ -1,4 +1,5 @@
 #include "wireless_manager.h"
+#include "login_screen.h"
 #include "config.h"
 
 #include <imgui.h>
@@ -142,17 +143,10 @@ int main(int argc, char** argv)
 	wireless_manager->Scan();
 	wireless_manager->UpdateNetworks();
 
+	LoginScreen* login_screen = nullptr;
+
 	auto next_scan = std::chrono::steady_clock::now() + 10s;
 	auto next_update = std::chrono::steady_clock::now() + 2s;
-
-	struct PasswordPrompt
-	{
-		bool		active			= false;
-		Network		network;
-		char		password[128];
-		bool		show_password;
-	};
-	PasswordPrompt password_prompt;
 
 	while (!glfwWindowShouldClose(window))
 	{
@@ -173,9 +167,7 @@ int main(int argc, char** argv)
 			ImGuiWindowFlags_NoMove
 		);
 
-		// If password prompt is active we cannot update network list since
-		// password_prompt holds a reference to a network in networks object. 
-		if (password_prompt.active == false && wireless_manager->GetCurrentDevice().powered == "on")
+		if (wireless_manager->GetCurrentDevice().powered == "on")
 		{
 			// Scan and update networks on specified intervals
 			auto current_time = std::chrono::steady_clock::now();
@@ -219,58 +211,10 @@ int main(int argc, char** argv)
 			ImGui::OpenPopup("known-networks");
 		}
 
-		if (ImGui::BeginPopupModal("known-networks", NULL,
-			ImGuiWindowFlags_AlwaysAutoResize |
-			ImGuiWindowFlags_NoTitleBar |
-			ImGuiWindowFlags_NoResize |
-			ImGuiWindowFlags_NoMove
-		))
-		{
-			const auto& known_networks = wireless_manager->GetKnownNetworks();
-
-			for (size_t i = 0; i < known_networks.size(); i++)
-			{
-				const Network& known = known_networks[i];
-				const size_t id_offset = wireless_manager->GetNetworks().size();
-
-				const float child_padding	= 10.0f;
-				const float text_padding	= 10.0f;
-				const float button_padding	= 5.0f;
-
-				const float font_size 		= ImGui::GetFontSize();
-
-				const ImVec2 child_size		= ImVec2(c_width - 2.0f * child_padding, font_size + 2.0f * text_padding);
-				const ImVec2 button_size	= ImVec2(ImGui::CalcTextSize("Forget").x + 20.0f, child_size.y - 2.0f * button_padding);
-
-				ImGui::BeginChild(id_offset + i + 1, child_size);
-				
-				ImGui::SetCursorPosX(text_padding);
-				ImGui::SetCursorPosY(text_padding);
-
-				ImGui::Text("%s", known.ssid.c_str());
-
-				ImGui::SetCursorPosX(child_size.x - button_size.x - button_padding);
-				ImGui::SetCursorPosY(button_padding);
-
-				if (ImGui::Button("Forget", button_size))
-				{
-					wireless_manager->ForgetKnownNetwork(known);
-					i = 100;
-				}
-
-				ImGui::EndChild();
-			}
-
-			if (ImGui::Button("Close"))
-				ImGui::CloseCurrentPopup();
-			ImGui::EndPopup();
-		}
+		known_networks_popup(wireless_manager);
 
 		ImGui::Spacing();
 		ImGui::Spacing();
-
-
-		bool open_password_prompt = false;
 
 		if (wireless_manager->GetCurrentDevice().powered != "on")
 		{
@@ -317,14 +261,10 @@ int main(int argc, char** argv)
 				{
 					if (ImGui::Button("Connect", button_size))
 					{
+						// Try to connect without credentials (open network or known network)
+						// If it is unsuccessfull, open a login screen
 						if (!wireless_manager->Connect(network))
-						{
-							password_prompt.network = network;
-							password_prompt.password[0] = '\0';
-							password_prompt.show_password = false;
-							password_prompt.active = true;
-							open_password_prompt = true;
-						}
+							login_screen = LoginScreen::Create(wireless_manager, network);
 					}
 				}
 
@@ -332,55 +272,14 @@ int main(int argc, char** argv)
 			}
 		}
 
-		if (open_password_prompt)
-			ImGui::OpenPopup("password-prompt");
-
-		if (ImGui::BeginPopupModal("password-prompt", NULL,
-			ImGuiWindowFlags_AlwaysAutoResize |
-			ImGuiWindowFlags_NoTitleBar |
-			ImGuiWindowFlags_NoResize |
-			ImGuiWindowFlags_NoMove
-		))
+		if (login_screen)
 		{
-			ImGuiInputTextFlags flags = 0;
-			flags |= ImGuiInputTextFlags_EnterReturnsTrue;
-			if (!password_prompt.show_password)
-				flags |= ImGuiInputTextFlags_Password;
-
-			bool connect = false;
-
-			bool close = false;
-
-			ImGui::Text("ssid: %s", password_prompt.network.ssid.c_str());
-
-			if (ImGui::InputText("##", password_prompt.password, sizeof(password_prompt.password), flags))
-				connect = true;
-
-			ImGui::SameLine();
-			if (ImGui::Button("Show"))
-				password_prompt.show_password = !password_prompt.show_password;
-
-			if (ImGui::Button("Connect"))
-				connect = true;
-
-			if (connect && password_prompt.password[0] != '\0')
+			login_screen->Show();
+			if (login_screen->Done())
 			{
-				if (wireless_manager->Connect(password_prompt.network, password_prompt.password))
-					close = true;
-				password_prompt.password[0] = '\0';
+				delete login_screen;
+				login_screen = nullptr;
 			}
-
-			ImGui::SameLine();
-			if (ImGui::Button("Cancel"))
-				close = true;
-
-			if (close)
-			{
-				password_prompt.active = false;
-				ImGui::CloseCurrentPopup();
-			}
-
-			ImGui::EndPopup();
 		}
 
 		ImGui::End();
@@ -393,6 +292,9 @@ int main(int argc, char** argv)
 		glfwSwapBuffers(window);
 	}
 
+	if (login_screen)
+		delete login_screen;
+		
 	delete wireless_manager;
 
 	ImGui_ImplOpenGL3_Shutdown();

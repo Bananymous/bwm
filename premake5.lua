@@ -73,6 +73,7 @@ project "bwm"
 		"src/imgui_build.cpp",
 		"src/iwd_wireless_manager.cpp",
 		"src/iwd_wrapper.cpp",
+		"src/login_screen.cpp",
 		"src/wireless_manager.cpp",
 	}
 
