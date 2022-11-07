@@ -84,6 +84,7 @@ static void known_networks_popup(WirelessManager* wireless_manager)
 int main(int argc, char** argv)
 {
 	using namespace std::chrono_literals;
+	using clock = std::chrono::steady_clock;
 
 	(void)argv;
 	if (argc != 1)
@@ -110,6 +111,7 @@ int main(int argc, char** argv)
 	if (window == NULL)
 	{
 		fprintf(stderr, "Could not create window\n");
+		glfwTerminate();
 		return EXIT_FAILURE;
 	}
 	glfwMakeContextCurrent(window);
@@ -145,8 +147,8 @@ int main(int argc, char** argv)
 
 	LoginScreen* login_screen = nullptr;
 
-	auto next_scan = std::chrono::steady_clock::now() + 10s;
-	auto next_update = std::chrono::steady_clock::now() + 2s;
+	auto next_scan		= clock::now() + 10s;
+	auto next_update	= clock::now() + 2s;
 
 	while (!glfwWindowShouldClose(window))
 	{
@@ -170,7 +172,7 @@ int main(int argc, char** argv)
 		if (wireless_manager->GetCurrentDevice().powered == "on")
 		{
 			// Scan and update networks on specified intervals
-			auto current_time = std::chrono::steady_clock::now();
+			auto current_time = clock::now();
 			if (current_time >= next_scan)
 			{
 				wireless_manager->Scan();
@@ -222,8 +224,8 @@ int main(int argc, char** argv)
 			{
 				if (wireless_manager->ActivateDevice())
 				{
-					next_scan = std::chrono::steady_clock::now();
-					next_update  = std::chrono::steady_clock::now();
+					next_scan	= clock::now();
+					next_update = clock::now();
 				}
 			}
 		}
@@ -294,15 +296,10 @@ int main(int argc, char** argv)
 
 	if (login_screen)
 		delete login_screen;
-		
+
 	delete wireless_manager;
 
-	ImGui_ImplOpenGL3_Shutdown();
-	ImGui_ImplGlfw_Shutdown();
-	ImGui::DestroyContext();
-
-	glfwDestroyWindow(window);
-	glfwTerminate();
+	cleanup(window);
 
 	return EXIT_SUCCESS;
 }
