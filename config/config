@@ -1,24 +1,25 @@
-# font
-font mono, 16
+# load font from file
+font DejaVu Sans Mono, 16
 
 # set background color
-background		#404040cc
-
-# set wifi entry background color
-wifi_background		#2a2a2acc
+background			#404040cc
+table_header		#00000020
 
 # set button color
-button			#262626cc
+button				#262626cc
 button_active		#1a1a1acc
 button_hover		#1a1a1acc
 
+table_border_inner	#303030
+table_border_outer	#303030
+
 # set dropdown colors
-dropdown		#262626cc
+dropdown			#262626cc
 dropdown_hover		#1a1a1acc
-selectable		#262626cc
+selectable			#262626cc
 selectable_hover	#1a1a1acc
 selectable_active	#1a1a1acc
 
 # set popup colors
 popup_background	#303030cc
-popup_shadow		#00000020
+popup_shadow		#000000aa

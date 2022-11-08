@@ -118,10 +118,10 @@ bool ParseConfig()
 
 	std::unordered_map<std::string, ImGuiCol> color_words;
 	color_words["background"]			= ImGuiCol_WindowBg;
+	color_words["border"]				= ImGuiCol_Border;
 	color_words["button"]				= ImGuiCol_Button;
 	color_words["button_active"]		= ImGuiCol_ButtonActive;
 	color_words["button_hover"]			= ImGuiCol_ButtonHovered;
-	color_words["wifi_background"]		= ImGuiCol_ChildBg;
 	color_words["dropdown"]				= ImGuiCol_FrameBg;
 	color_words["dropdown_hover"]		= ImGuiCol_FrameBgHovered;
 	color_words["selectable"]			= ImGuiCol_Header;
@@ -129,6 +129,11 @@ bool ParseConfig()
 	color_words["selectable_hover"]		= ImGuiCol_HeaderHovered;
 	color_words["popup_background"]		= ImGuiCol_PopupBg;
 	color_words["popup_shadow"]			= ImGuiCol_ModalWindowDimBg;
+	color_words["table_header"]			= ImGuiCol_TableHeaderBg;
+	color_words["table_row"]			= ImGuiCol_TableRowBg;
+	color_words["table_row_alt"]		= ImGuiCol_TableRowBgAlt;
+	color_words["table_border_inner"]	= ImGuiCol_TableBorderLight;
+	color_words["table_border_outer"]	= ImGuiCol_TableBorderStrong;
 
 	int line = 0;
 	while (fgets(buffer, sizeof(buffer), fp) != NULL)

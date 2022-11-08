@@ -125,14 +125,15 @@ static void known_networks_popup(WirelessManager* wireless_manager)
 
 	const auto& known_networks = wireless_manager->GetKnownNetworks();
 
-	if (ImGui::BeginTable("known-networks", 2))
+	if (ImGui::BeginTable("known-networks", 2, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg))
 	{
 		ImVec2 known_button_size = ImGui::CalcTextSize("Forget");
 		known_button_size.x += 10.0f;
 		known_button_size.y += 10.0f;
 
-		ImGui::TableSetupColumn("##", ImGuiTableColumnFlags_WidthFixed, WINDOW_WIDTH - 2 * known_button_size.x);
+		ImGui::TableSetupColumn("ssid", ImGuiTableColumnFlags_WidthFixed, WINDOW_WIDTH - 2 * known_button_size.x);
 		ImGui::TableSetupColumn("##", ImGuiTableColumnFlags_WidthFixed, known_button_size.x);
+		ImGui::TableHeadersRow();
 
 		std::size_t count = known_networks.size();
 		for (std::size_t i = 0; i < count; i++)
@@ -310,13 +311,13 @@ int main(int argc, char** argv, char** env)
 				}
 			}
 		}
-		else if (ImGui::BeginTable("networks", 3))
+		else if (ImGui::BeginTable("networks", 3, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg))
 		{
 			const ImVec2 button_size = ImVec2(ImGui::CalcTextSize("Disconnect").x + 10.0f, 0.0f);
 
 			ImGui::TableSetupColumn("ssid");
 			ImGui::TableSetupColumn("security", ImGuiTableColumnFlags_WidthFixed, -1);
-			ImGui::TableSetupColumn("",			ImGuiTableColumnFlags_WidthFixed, -1);
+			ImGui::TableSetupColumn("##",		ImGuiTableColumnFlags_WidthFixed, -1);
 			ImGui::TableHeadersRow();
 
 			for (size_t i = 0; i < wireless_manager->GetNetworks().size(); i++)
