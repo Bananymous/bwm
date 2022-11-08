@@ -118,16 +118,18 @@ static std::string get_iwd_file_name(const Network& network)
 
 	std::stringstream ss;
 
+	ss << "/var/lib/iwd/";
+
 	if (basic)
 	{
-		ss << "/var/lib/iwd/" << network.ssid;
+		ss << network.ssid;
 	}
 	else
 	{
-		ss << std::hex << std::setfill('0') << std::setw(2);
 		ss << "=";
+		ss << std::hex << std::setfill('0') << std::setw(2);
 		for (char c : network.ssid)
-			ss << c;
+			ss << (int)c;
 	}
 	
 	ss << "." << network.security;
