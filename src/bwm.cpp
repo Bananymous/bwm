@@ -10,8 +10,12 @@
 
 #include <chrono>
 
-#define WINDOW_WIDTH	400
-#define WINDOW_HEIGHT	400
+int		g_argc;
+char**	g_argv;
+char**	g_env;
+
+int WINDOW_WIDTH = 400;
+int WINDOW_HEIGHT = 400;
 
 static void glfw_error_callback(int error, const char* description)
 {
@@ -27,6 +31,85 @@ static void cleanup(GLFWwindow* window)
 	glfwDestroyWindow(window);
 	glfwTerminate();
 }
+
+static void frame_start(GLFWwindow* window)
+{
+	glfwPollEvents();
+
+	// Create new frame
+	ImGui_ImplOpenGL3_NewFrame();
+	ImGui_ImplGlfw_NewFrame();
+	ImGui::NewFrame();
+
+	glfwGetWindowSize(window, &WINDOW_WIDTH, &WINDOW_HEIGHT);
+
+	// Set ImGui window to fill whole application window
+	ImGui::SetNextWindowSize(ImVec2(WINDOW_WIDTH, WINDOW_HEIGHT));
+	ImGui::SetNextWindowPos(ImVec2(0.0f, 0.0f));
+
+	ImGui::Begin("Window", NULL,
+		ImGuiWindowFlags_NoTitleBar |
+		ImGuiWindowFlags_NoResize |
+		ImGuiWindowFlags_NoMove
+	);
+}
+
+static void frame_end(GLFWwindow* window)
+{
+	ImGui::End();
+
+	ImGui::Render();
+	glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
+	glClear(GL_COLOR_BUFFER_BIT);
+	ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+
+	glfwSwapBuffers(window);
+}
+
+
+
+static void get_and_echo_password(GLFWwindow* window)
+{
+	char password[128] {};
+	bool hide_password = true;
+
+	while (!glfwWindowShouldClose(window))
+	{
+		frame_start(window);
+
+		ImGui::Text("%s", g_argv[1]);
+
+		bool done = false;
+		
+		ImGuiInputTextFlags flags = ImGuiInputTextFlags_EnterReturnsTrue;
+		if (hide_password)
+			flags |= ImGuiInputTextFlags_Password;
+
+		done |= ImGui::InputText("##", password, sizeof(password), flags);
+
+		ImGui::SameLine();
+		if (ImGui::Button("Show"))
+			hide_password = !hide_password;
+
+		done |= ImGui::Button("Enter");
+
+		ImGui::SameLine();
+		if (ImGui::Button("Cancel"))
+			break;
+
+		if (done)
+		{
+			std::printf("%s", password);
+			break;
+		}
+
+		frame_end(window);
+	}
+
+	cleanup(window);
+}
+
+
 
 static void known_networks_popup(WirelessManager* wireless_manager)
 {
@@ -77,17 +160,28 @@ static void known_networks_popup(WirelessManager* wireless_manager)
 	if (ImGui::Button("Close"))
 		ImGui::CloseCurrentPopup();
 	ImGui::EndPopup();
-
 }
 
-int main(int argc, char** argv)
+int main(int argc, char** argv, char** env)
 {
 	using namespace std::chrono_literals;
 	using clock = std::chrono::steady_clock;
 
-	(void)argv;
-	if (argc != 1)
+	bool password_mode = (argc == 2 && strncmp(argv[1], "[sudo]", 6) == 0);
+
+	g_argc = argc;
+	g_argv = argv;
+	g_env = env;
+
+	if (password_mode)
 	{
+		WINDOW_HEIGHT = 100;
+		WINDOW_WIDTH = 250;
+	}
+	else if (argc != 1)
+	{
+		for (int i = 0; i < argc; i++)
+			fprintf(stderr, "%s\n", argv[i]);
 		fprintf(stderr, "bwm does not support commandline arguments\n");
 		return EXIT_FAILURE;
 	}
@@ -104,7 +198,6 @@ int main(int argc, char** argv)
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
 
 	glfwWindowHint(GLFW_TRANSPARENT_FRAMEBUFFER, GLFW_TRUE);
-	glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
 
 	GLFWwindow* window = glfwCreateWindow(WINDOW_WIDTH, WINDOW_HEIGHT, "bwm", NULL, NULL);
 	if (window == NULL)
@@ -134,6 +227,12 @@ int main(int argc, char** argv)
 		return EXIT_FAILURE;
 	}
 
+	if (password_mode)
+	{
+		get_and_echo_password(window);
+		return 0;
+	}
+
 	WirelessManager* wireless_manager = WirelessManager::Create(WirelessBackend::iwd);
 	if (!wireless_manager)
 	{
@@ -151,22 +250,7 @@ int main(int argc, char** argv)
 
 	while (!glfwWindowShouldClose(window))
 	{
-		glfwPollEvents();
-
-		// Create new frame
-		ImGui_ImplOpenGL3_NewFrame();
-		ImGui_ImplGlfw_NewFrame();
-		ImGui::NewFrame();
-
-		// Set ImGui window to fill whole application window
-		ImGui::SetNextWindowSize(ImVec2(WINDOW_WIDTH, WINDOW_HEIGHT));
-		ImGui::SetNextWindowPos(ImVec2(0.0f, 0.0f));
-
-		ImGui::Begin("Window", NULL,
-			ImGuiWindowFlags_NoTitleBar |
-			ImGuiWindowFlags_NoResize |
-			ImGuiWindowFlags_NoMove
-		);
+		frame_start(window);
 
 		if (wireless_manager->GetCurrentDevice().powered == "on")
 		{
@@ -259,7 +343,7 @@ int main(int argc, char** argv)
 				{
 					ImGui::PushID(i + 1);
 					if (ImGui::Button("Connect", button_size))
-					{
+					{						
 						if (!wireless_manager->Connect(network))
 							login_screen = LoginScreen::Create(wireless_manager, network);
 					}
@@ -279,15 +363,8 @@ int main(int argc, char** argv)
 				login_screen = nullptr;
 			}
 		}
-
-		ImGui::End();
-
-		ImGui::Render();
-		glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
-		glClear(GL_COLOR_BUFFER_BIT);
-		ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
-
-		glfwSwapBuffers(window);
+		
+		frame_end(window);
 	}
 
 	if (login_screen)

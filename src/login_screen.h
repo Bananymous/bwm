@@ -15,20 +15,43 @@ public:
 	virtual void Show() = 0;
 };
 
-class PskLoginScreen : public LoginScreen
+class LoginScreenPsk : public LoginScreen
 {
 public:
-	PskLoginScreen(WirelessManager* wireless_manager, const Network& network);
+	LoginScreenPsk(WirelessManager* wireless_manager, const Network& network);
 
 	virtual bool Done() const override { return m_done; } 
 	virtual void Show() override;
 
 private:
-	bool					m_is_opened = false;
-	bool					m_done;
+	bool					m_is_opened		= false;
+	bool					m_done			= false;
 
-	char					m_password[128];
-	bool					m_hide_password = true;
+	char					m_password[128] {};
+	bool					m_hide_password	= true;
+
+	WirelessManager*		m_wireless_manager;
+	Network					m_network;
+};
+
+class LoginScreen8021x : public LoginScreen
+{
+public:
+	LoginScreen8021x(WirelessManager* wireless_manager, const Network& network);
+
+	virtual bool Done() const override { return m_done; }
+	virtual void Show() override;
+
+private:
+	std::string GetConfigData() const;
+
+private:
+	bool					m_is_opened		= false;
+	bool					m_done			= false;
+
+	char 					m_username[128] {};
+	char					m_password[128] {};
+	bool					m_hide_password	= true;
 
 	WirelessManager*		m_wireless_manager;
 	Network					m_network;
