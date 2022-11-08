@@ -125,36 +125,34 @@ static void known_networks_popup(WirelessManager* wireless_manager)
 
 	const auto& known_networks = wireless_manager->GetKnownNetworks();
 
-	for (size_t i = 0; i < known_networks.size(); i++)
+	if (ImGui::BeginTable("known-networks", 2))
 	{
-		const Network& known = known_networks[i];
+		ImVec2 known_button_size = ImGui::CalcTextSize("Forget");
+		known_button_size.x += 10.0f;
+		known_button_size.y += 10.0f;
 
-		const float child_padding	= 10.0f;
-		const float text_padding	= 10.0f;
-		const float button_padding	= 5.0f;
+		ImGui::TableSetupColumn("##", ImGuiTableColumnFlags_WidthFixed, WINDOW_WIDTH - 2 * known_button_size.x);
+		ImGui::TableSetupColumn("##", ImGuiTableColumnFlags_WidthFixed, known_button_size.x);
 
-		const float font_size 		= ImGui::GetFontSize();
-
-		const ImVec2 child_size		= ImVec2(WINDOW_WIDTH - 2.0f * child_padding, font_size + 2.0f * text_padding);
-		const ImVec2 button_size	= ImVec2(ImGui::CalcTextSize("Forget").x + 20.0f, child_size.y - 2.0f * button_padding);
-
-		ImGui::BeginChild(i + 1, child_size);
-		
-		ImGui::SetCursorPosX(text_padding);
-		ImGui::SetCursorPosY(text_padding);
-
-		ImGui::Text("%s", known.ssid.c_str());
-
-		ImGui::SetCursorPosX(child_size.x - button_size.x - button_padding);
-		ImGui::SetCursorPosY(button_padding);
-
-		if (ImGui::Button("Forget", button_size))
+		std::size_t count = known_networks.size();
+		for (std::size_t i = 0; i < count; i++)
 		{
-			wireless_manager->ForgetKnownNetwork(known);
-			i = 100;
+			const Network& network = known_networks[i];
+
+			ImGui::TableNextColumn();
+			ImGui::Text("%s", network.ssid.c_str());
+
+			ImGui::TableNextColumn();
+			ImGui::PushID(i + 1000);
+			if (ImGui::Button("Forget", known_button_size))
+			{
+				wireless_manager->ForgetKnownNetwork(network);
+				i = count;
+			}
+			ImGui::PopID();
 		}
 
-		ImGui::EndChild();
+		ImGui::EndTable();
 	}
 
 	if (ImGui::Button("Close"))

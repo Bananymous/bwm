@@ -7,6 +7,7 @@
 #include <fstream>
 #include <iomanip>
 #include <sstream>
+#include <strings.h>
 #include <sys/wait.h>
 #include <thread>
 #include <unistd.h>
@@ -119,14 +120,17 @@ static std::string get_iwd_file_name(const Network& network)
 
 	if (basic)
 	{
-		ss << "/var/lib/iwd/" << network.ssid << "." << network.security;
+		ss << "/var/lib/iwd/" << network.ssid;
 	}
 	else
 	{
 		ss << std::hex << std::setfill('0') << std::setw(2);
+		ss << "=";
 		for (char c : network.ssid)
 			ss << c;
 	}
+	
+	ss << "." << network.security;
 
 	return ss.str();
 }
@@ -245,6 +249,7 @@ void LoginScreen8021x::Show()
 
 	ImGui::Text("ssid: %s", m_network.ssid.c_str());
 
+	ImGui::InputText("anonymous", m_anonymous, sizeof(m_anonymous));
 	ImGui::InputText("username", m_username, sizeof(m_username));
 
 	ImGuiInputTextFlags flags = ImGuiInputTextFlags_EnterReturnsTrue;
@@ -260,7 +265,7 @@ void LoginScreen8021x::Show()
 	if (ImGui::Button("Connect"))
 		connect = true;
 
-	if (connect)
+	if (connect && m_username[0] && m_password[0])
 	{
 		auto config_data = GetConfigData();
 		auto file_name = get_iwd_file_name(m_network);
@@ -306,15 +311,22 @@ std::string LoginScreen8021x::GetConfigData() const
 	EAP-PEAP-Phase2-Password=hunter2
 	*/
 
+	// FIXME: do not hardcode method
+
+	char anonymous[sizeof(m_anonymous)] {};
+	if (m_anonymous[0])
+		strncpy(anonymous, m_anonymous, sizeof(anonymous));
+	else if (auto ptr = index(m_username, '@'))
+		snprintf(anonymous, sizeof(anonymous), "anonymous%s", ptr);
+
 	std::stringstream ss;
-	ss << "[Security]"								<< std::endl;
-	ss << "EAP-Method=PEAP"							<< std::endl;
-	//ss << "EAP-Identity="							<< std::endl;
-	//ss << "EAP-PEAP-CACert="						<< std::endl;
-	//ss << "EAP-PEAP-ServerDomainMask="			<< std::endl;
-	ss << "EAP-PEAP-Phase2-Method=MSCHAPV2"			<< std::endl;
-	ss << "EAP-PEAP-Phase2-Identity=" << m_username	<< std::endl;
-	ss << "EAP-PEAP-Phase2-Password=" << m_password	<< std::endl;
+	ss << "[Security]"									<< std::endl;
+	ss << "EAP-Method=PEAP"								<< std::endl;
+	if (anonymous[0])
+		ss << "EAP-Identity="			<< anonymous	<< std::endl;
+	ss << "EAP-PEAP-Phase2-Method=MSCHAPV2"				<< std::endl;
+	ss << "EAP-PEAP-Phase2-Identity="	<< m_username	<< std::endl;
+	ss << "EAP-PEAP-Phase2-Password="	<< m_password	<< std::endl;
 
 	return ss.str();
 }

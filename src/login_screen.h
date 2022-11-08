@@ -49,6 +49,7 @@ private:
 	bool					m_is_opened		= false;
 	bool					m_done			= false;
 
+	char					m_anonymous[128] {};
 	char 					m_username[128] {};
 	char					m_password[128] {};
 	bool					m_hide_password	= true;
