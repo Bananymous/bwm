@@ -8,6 +8,7 @@
 #include <iomanip>
 #include <sstream>
 #include <sys/wait.h>
+#include <thread>
 #include <unistd.h>
 
 extern int		g_argc;
@@ -107,14 +108,33 @@ static bool write_as_root(const std::string file, const std::string& data)
 	return true;
 }
 
+static std::string get_iwd_file_name(const Network& network)
+{
+	bool basic = true;
+	for (char c : network.ssid)
+		if (!isalnum(c) && c != '-' && c != '_')
+			basic = false;
+
+	std::stringstream ss;
+
+	if (basic)
+	{
+		ss << "/var/lib/iwd/" << network.ssid << "." << network.security;
+	}
+	else
+	{
+		ss << std::hex << std::setfill('0') << std::setw(2);
+		for (char c : network.ssid)
+			ss << c;
+	}
+
+	return ss.str();
+}
+
 
 LoginScreen* LoginScreen::Create(WirelessManager* wireless_manager, const Network& network)
 {
 	assert(wireless_manager);
-
-	if (network.ssid == "asus-btw")
-		return new LoginScreen8021x(wireless_manager, network);
-
 
 	if (network.security == "psk")
 		return new LoginScreenPsk(wireless_manager, network);
@@ -174,6 +194,7 @@ void LoginScreenPsk::Show()
 	{
 		if (m_wireless_manager->Connect(m_network, m_password))
 			close = true;
+
 		m_password[0] = '\0';
 	}
 
@@ -196,30 +217,6 @@ void LoginScreenPsk::Show()
 /*
 		8021x
 */
-
-static std::string GetIwdFileName(const Network& network)
-{
-	bool basic = true;
-	for (char c : network.ssid)
-		if (!isalnum(c) && c != '-' && c != '_')
-			basic = false;
-
-	std::stringstream ss;
-
-	if (basic)
-	{
-		ss << "/var/lib/iwd/" << network.ssid << "." << network.security;
-	}
-	else
-	{
-		ss << std::hex << std::setfill('0') << std::setw(2);
-		for (char c : network.ssid)
-			ss << c;
-	}
-
-	return ss.str();
-}
-
 
 LoginScreen8021x::LoginScreen8021x(WirelessManager* wireless_manager, const Network& network)
 	: m_wireless_manager(wireless_manager)
@@ -266,11 +263,18 @@ void LoginScreen8021x::Show()
 	if (connect)
 	{
 		auto config_data = GetConfigData();
-		auto file_name = GetIwdFileName(m_network);
+		auto file_name = get_iwd_file_name(m_network);
 
 		if (write_as_root(file_name, config_data))
+		{
+			// iwd does not seem to reload /var/lib/iwd
+			// unless it is restarted.
+			std::system("sudo systemctl restart iwd");
+			std::this_thread::sleep_for(std::chrono::seconds(3));
+
 			if (m_wireless_manager->Connect(m_network))
 				close = true;
+		}
 
 		m_password[0] = '\0';
 	}
