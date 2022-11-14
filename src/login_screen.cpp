@@ -276,11 +276,20 @@ void LoginScreen8021x::Show()
 		{
 			// iwd does not seem to reload /var/lib/iwd
 			// unless it is restarted.
-			std::system("sudo systemctl restart iwd");
-			std::this_thread::sleep_for(std::chrono::seconds(3));
-
-			if (m_wireless_manager->Connect(m_network))
-				close = true;
+			if (std::system("sudo -n systemctl restart iwd") == 0)
+			{
+				std::this_thread::sleep_for(std::chrono::seconds(3));
+				if (m_wireless_manager->Connect(m_network))
+					close = true;
+			}
+			else
+			{
+				std::fprintf(stderr, "Could not restart iwd\n");
+			}
+		}
+		else
+		{
+			std::fprintf(stderr, "Could not write file\n");
 		}
 
 		m_password[0] = '\0';
