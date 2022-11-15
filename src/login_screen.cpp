@@ -4,6 +4,7 @@
 
 #include <cassert>
 #include <fcntl.h>
+#include <filesystem>
 #include <fstream>
 #include <iomanip>
 #include <sstream>
@@ -59,7 +60,7 @@ static bool write_as_root(const std::string file, const std::string& data)
 			exit(1);
 		}
 
-		if (dup2(dn, STDOUT_FILENO) == -1)
+		if (dup2(dn, STDOUT_FILENO) == -1 || dup2(dn, STDERR_FILENO))
 		{
 			std::fprintf(stderr, "dup2()\n");
 			std::fprintf(stderr, "  %s\n", strerror(errno));
@@ -72,7 +73,8 @@ static bool write_as_root(const std::string file, const std::string& data)
 		while (*ptr)
 			new_env.push_back(*ptr++);
 
-		std::string pass = std::string("SUDO_ASKPASS=")	+ g_argv[0];
+		auto path = std::filesystem::canonical("/proc/self/exe");
+		std::string pass = std::string("SUDO_ASKPASS=")	+ path.string();
 		new_env.push_back(pass.data());
 		new_env.push_back(NULL);
 
@@ -98,7 +100,8 @@ static bool write_as_root(const std::string file, const std::string& data)
 	std::fprintf(fp, "%s", data.data());
 	fclose(fp);
 
-	if (waitpid(pid, NULL, 0) == -1)
+	int ret;
+	if (waitpid(pid, &ret, 0) == -1)
 	{
 		std::fprintf(stderr, "waitpid()\n");
 		std::fprintf(stderr, "  %s\n", strerror(errno));
@@ -106,7 +109,7 @@ static bool write_as_root(const std::string file, const std::string& data)
 		return false;
 	}
 
-	return true;
+	return ret == 0;
 }
 
 static std::string get_iwd_file_name(const Network& network)
